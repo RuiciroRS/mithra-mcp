@@ -1,0 +1,7 @@
+node_modules/
+*.log
+.DS_Store
+.env
+
+# your workspace map — yours alone, never committed
+mithra.config.json

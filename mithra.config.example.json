@@ -1,0 +1,42 @@
+{
+  "//": "Copy to mithra.config.json (gitignored) and edit. Every key is optional.",
+
+  "//root": "Where your projects live — relative to this folder, or absolute. MITHRA_DOCS overrides it.",
+  "root": "..",
+
+  "//tasksFile": "Cross-project checklist at the root of `root`. Parsed as ## Status -> ### Project -> - [ ] item.",
+  "tasksFile": "TASKS.md",
+
+  "//manualTaskMarkers": "A task containing one of these is flagged as a manual action of yours (not delegable).",
+  "manualTaskMarkers": ["(you)"],
+
+  "//vault": "Optional Obsidian vault for Kanban boards. Omit or null if you don't use one.",
+  "vault": {
+    "dir": "MyVault",
+    "sessionsDir": "05_Sessions",
+    "boardFile": "Board.md"
+  },
+
+  "//projects": "'auto' scans `root` for git repos. Or list them explicitly, like below.",
+  "projects": [
+    {
+      "name": "My App",
+      "dir": "my-app",
+      "type": "git",
+      "deploy": "https://my-app.com",
+      "vault": "01_MyApp",
+      "priority": 1,
+      "tasks": { "include": ["My App"], "exclude": [] }
+    },
+    {
+      "name": "Landing",
+      "dir": "my-landing",
+      "type": "fs",
+      "deploy": "https://my-app.io",
+      "vault": null,
+      "priority": 3,
+      "board": false,
+      "tasks": { "include": ["Landing"], "exclude": [] }
+    }
+  ]
+}

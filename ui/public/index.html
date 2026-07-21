@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" data-theme="solar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mithra</title>
+  <link rel="stylesheet" href="/vendor/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="/themes.css" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="bar">
+      <div class="brand"><span class="sun">☉</span> <span id="brand-name">MITHRA</span></div>
+      <div class="bar-spacer"></div>
+      <button id="refresh-all" class="bar-btn" data-i18n-title="bar_refresh" title="reload state">↻</button>
+      <span class="refresh-ago" id="refresh-ago"></span>
+      <div class="clock" id="clock"></div>
+      <button id="palette-btn" class="bar-btn" data-i18n-title="bar_palette" title="search / jump (Ctrl+K)">⌘ K</button>
+      <button id="standup-btn" class="bar-btn" data-i18n-title="bar_standup" data-i18n="btn_today" title="today's standup">◴ today</button>
+      <button id="wm-btn" class="bar-btn" data-i18n-title="bar_memory" data-i18n="btn_memory" title="WORKING_MEMORY">☉ memory</button>
+      <button id="term-toggle" class="bar-btn term-toggle" data-i18n-title="bar_terminal" data-i18n="btn_terminal" title="terminal (Ctrl+;)">⌨ terminal</button>
+      <div class="status" id="status" data-i18n-title="bar_conn" title="terminal connection">●</div>
+    </header>
+
+    <div id="layout">
+      <!-- Project rail -->
+      <nav id="rail">
+        <div class="rail-head" data-i18n="rail_projects">Projects</div>
+        <div id="rail-list"><div class="rail-loading">…</div></div>
+      </nav>
+
+      <!-- Panel principal -->
+      <main id="main">
+        <div id="tabs"></div>
+        <div id="view"><div class="v-empty" data-i18n="pick_project">Pick a project on the left.</div></div>
+      </main>
+    </div>
+
+    <!-- Terminal drawer (collapsible) -->
+    <section id="drawer" class="collapsed">
+      <div id="drawer-head">
+        <span class="d-title" data-i18n="drawer_title">⌨ Claude Code</span>
+        <button id="term-here" class="d-here" data-i18n-title="drawer_here_t" data-i18n="drawer_here" title="terminal anchored to the active project">↻ here</button>
+        <div class="chips" id="chips"></div>
+        <button id="drawer-close" data-i18n-title="close" title="close">⌄</button>
+      </div>
+      <div id="term-tabs"></div>
+      <div id="term-stack"></div>
+    </section>
+
+    <!-- Overlay WORKING_MEMORY -->
+    <div id="wm-overlay" class="ovl hidden">
+      <section class="wm-card">
+        <div class="wm-head">
+          <span class="wm-title"><span class="sun">☉</span> WORKING_MEMORY</span>
+          <button class="bar-btn" onclick="document.getElementById('wm-overlay').classList.add('hidden')" data-i18n-title="close_esc" title="close (Esc)">✕</button>
+        </div>
+        <div class="wm-body-wrap" id="wm-body"></div>
+      </section>
+    </div>
+
+    <!-- Overlay Standup -->
+    <div id="standup-overlay" class="ovl hidden">
+      <section class="wm-card">
+        <div class="wm-head">
+          <span class="wm-title"><span class="sun">◴</span> <span data-i18n="pal_standup">Standup</span></span>
+          <button class="bar-btn" onclick="document.getElementById('standup-overlay').classList.add('hidden')" data-i18n-title="close_esc" title="close (Esc)">✕</button>
+        </div>
+        <div class="wm-body-wrap" id="standup-body"></div>
+      </section>
+    </div>
+
+    <!-- Overlay Commit & push -->
+    <div id="commit-overlay" class="ovl hidden">
+      <section class="wm-card">
+        <div class="wm-head">
+          <span class="wm-title"><span class="sun">⎇</span> Commit &amp; push</span>
+          <button class="bar-btn" onclick="document.getElementById('commit-overlay').classList.add('hidden')" data-i18n-title="close_esc" title="close (Esc)">✕</button>
+        </div>
+        <div class="wm-body-wrap" id="commit-body"></div>
+      </section>
+    </div>
+
+    <!-- Command palette -->
+    <div id="palette-overlay" class="ovl hidden">
+      <section class="palette-card">
+        <input id="palette-input" type="text" data-i18n-ph="pal_ph" placeholder="jump to project / tab / skill…" autocomplete="off" spellcheck="false" />
+        <div id="palette-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <script src="/vendor/xterm/lib/xterm.js"></script>
+  <script src="/vendor/fit/lib/addon-fit.js"></script>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

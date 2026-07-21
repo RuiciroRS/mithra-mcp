@@ -1,22 +1,25 @@
 <div align="center">
 
-# ☉ Mithra MCP
+# ☉ Mithra
 
 **Your workspace as state an agent can reason over.**
 
-An [MCP](https://modelcontextprotocol.io) server that turns a one-person, multi-project
-workspace into queryable tools — live git state, Kanban boards, tasks, standups, production
-health — so any MCP client can ask about it in natural language instead of guessing from
-stale context.
+A local-first command center for a one-person, multi-project workspace. It reads live git
+state, Kanban boards, tasks, standups and production health — and exposes them two ways: as a
+**GUI** you keep open all day, and as [**MCP**](https://modelcontextprotocol.io) tools any
+client can query in natural language.
 
 [![license](https://img.shields.io/badge/license-MIT-f5c542)](LICENSE)
-&nbsp;·&nbsp; read-only &nbsp;·&nbsp; stdio, no network port &nbsp;·&nbsp; no build step &nbsp;·&nbsp; Node 18+
+&nbsp;·&nbsp; read-only &nbsp;·&nbsp; localhost only &nbsp;·&nbsp; no build step &nbsp;·&nbsp; Node 18+
 
 </div>
 
 ---
 
 ```
+npm start        → the GUI: every repo in one window, with a real Claude terminal
+npm run mcp      → the MCP server: the same workspace as tools, over stdio
+
 "which repos are stale?"       → list_projects
 "what should I attack first?"  → next_actions
 "is prod up?"                  → deploy_health
@@ -24,12 +27,11 @@ stale context.
 
 I run several projects at once — a SaaS, a B2C app, a landing site, a game project, and the
 tooling that holds it together — as a single engineer. Context evaporates between sessions.
-**Mithra** is the local-first command-center I built on Claude Code primitives to keep all of
-it in view. This repo is one piece of it: the part that exposes a workspace over the Model
-Context Protocol, so *any* client — Claude Desktop, Claude Code — can query it live.
+**Mithra** is what I built on Claude Code primitives to keep all of it in view.
 
-Point it at your own folders with one JSON file and it's yours. Nothing about my workspace is
-baked into the code.
+Two surfaces, one workspace, **one config file**. The GUI is where I work; the MCP server is
+how an agent reasons about the same state. Point it at your own folders with one JSON file and
+it's yours — nothing about my workspace is baked into the code.
 
 ## The idea: bounded memory + retrieval, not a bigger prompt
 
@@ -153,11 +155,31 @@ npm install
 cp mithra.config.example.json mithra.config.json   # then edit it
 
 npm run smoke          # verifies the data layer against your workspace
-npm start              # starts the MCP server on stdio
+npm start              # the GUI, on http://127.0.0.1:7777
+npm run mcp            # the MCP server, on stdio
 ```
 
 **Zero-config:** drop this folder *next to your repos* and skip the config file entirely —
 Mithra defaults to `root: ".."` and **auto-scans the parent folder** for git repos.
+
+## The GUI
+
+`npm start` opens one local window over every repo — the surface I actually keep open:
+
+- **Project rail** — every project with its branch, uncommitted count and last commit, live.
+- **A real embedded terminal.** Not a chat box: the actual Claude Code CLI, running in a pty
+  (`node-pty` + `xterm.js` over a WebSocket), already `cd`'d into the project you clicked.
+  Skill chips above it type `/code-review`, `/deep-research`… into the prompt.
+- **Boards, tasks, docs, sessions** — the same reads the MCP tools expose, rendered.
+- **One-click commit** for the small stuff that doesn't deserve a terminal.
+
+**It binds to `127.0.0.1` and nothing else, on purpose.** That terminal launches a real Claude
+CLI with your credentials; exposing it to a network would hand anyone on it a shell. There is
+no auth layer because there is no remote surface to authenticate.
+
+The GUI lives in [`ui/`](ui/) and shares `config.js` with the MCP server — one config file, two
+surfaces. On Windows, [`ui/start.ps1`](ui/start.ps1) launches it as a chromeless Edge
+`--app` window, and `ui/install-autostart.ps1` makes it come up at login.
 
 ## Configuration
 
@@ -171,6 +193,10 @@ Everything lives in **`mithra.config.json`** (gitignored — yours alone). Full 
 | `manualTaskMarkers` | `["(you)"]` | A task containing one of these is flagged as your own manual action, not delegable. |
 | `vault` | `null` | Optional Obsidian vault: `{ dir, sessionsDir, boardFile }`. Powers `get_board`. |
 | `projects` | `"auto"` | `"auto"` scans `root`, or list them explicitly. |
+
+GUI-only keys — the MCP server ignores them: `appName`, `lang` (`en`/`es`), `theme`, `host`,
+`port`, `claudeBin` (`"auto"` finds it on PATH), `skills`, `docFiles`, `workingMemoryFile`,
+`workingMemoryCap`.
 
 ### Explicit projects
 
@@ -228,15 +254,9 @@ context.** Concretely, next:
   "what needs me right now" becomes another read-only tool.
 - **The memory loop closes itself.** The working-memory snapshot stops being hand-curated: the
   agent proposes what to promote, demote, and forget, with you as the editor.
-- **The GUI and the tools converge.** [Mithra UI](https://github.com/RuiciroRS/mithra-ui) already
-  embeds the real Claude CLI (node-pty + xterm.js + WebSockets); these tools become how it
-  thinks, not just what it shows.
-
-## The other half
-
-**[Mithra UI](https://github.com/RuiciroRS/mithra-ui)** — the GUI of the same command-center:
-one local window over every repo, with a live project rail, embedded real Claude terminals,
-boards, tasks and one-click commit. Same workspace, different surface. Also MIT, also fork-first.
+- **The GUI and the tools converge.** The GUI already embeds the real Claude CLI; the next step
+  is wiring these tools into that terminal's own context, so they become how it thinks, not
+  just what it shows.
 
 ## Stack
 

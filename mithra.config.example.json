@@ -1,5 +1,30 @@
 {
   "//": "Copy to mithra.config.json (gitignored) and edit. Every key is optional.",
+  "//both": "One file drives both surfaces: the GUI (npm start) and the MCP server (npm run mcp).",
+
+  "//appName": "GUI only. Window title and the name in the header.",
+  "appName": "Mithra",
+
+  "//lang": "GUI only. 'en' or 'es'.",
+  "lang": "en",
+
+  "//theme": "GUI only. See ui/public/themes.css for what ships.",
+  "theme": "solar",
+
+  "//host": "GUI only. Keep it on 127.0.0.1: the embedded terminal launches a real Claude CLI.",
+  "host": "127.0.0.1",
+  "port": 7777,
+
+  "//claudeBin": "GUI only. 'auto' looks up claude on PATH; or give an absolute path.",
+  "claudeBin": "auto",
+
+  "//skills": "GUI only. The chips above the terminal. Each one types its cmd into the prompt.",
+  "skills": [
+    { "label": "Code Review",   "cmd": "/code-review " },
+    { "label": "Deep Research", "cmd": "/deep-research " },
+    { "label": "Simplify",      "cmd": "/simplify " },
+    { "label": "Run",           "cmd": "/run " }
+  ],
 
   "//root": "Where your projects live — relative to this folder, or absolute. MITHRA_DOCS overrides it.",
   "root": "..",
@@ -10,7 +35,14 @@
   "//manualTaskMarkers": "A task containing one of these is flagged as a manual action of yours (not delegable).",
   "manualTaskMarkers": ["(you)"],
 
-  "//vault": "Optional Obsidian vault for Kanban boards. Omit or null if you don't use one.",
+  "//docFiles": "GUI only. Per-project docs the Docs tab knows how to render (whitelist).",
+  "docFiles": ["CURRENT_FIRE.md", "CLAUDE.md", "AGENTS.md", "README.md"],
+
+  "//workingMemory": "GUI only. A short, hand-curated memory file at the root of `root`, with a size cap.",
+  "workingMemoryFile": "WORKING_MEMORY.md",
+  "workingMemoryCap": 2000,
+
+  "//vault": "Optional Obsidian vault for Kanban boards, design docs and session notes. Omit or null if you don't use one.",
   "vault": {
     "dir": "MyVault",
     "sessionsDir": "05_Sessions",
@@ -18,6 +50,7 @@
   },
 
   "//projects": "'auto' scans `root` for git repos. Or list them explicitly, like below.",
+  "//projects2": "vault = this project's folder inside the vault. vaultFilter/vaultExclude narrow it when two projects share one vault folder.",
   "projects": [
     {
       "name": "My App",
@@ -26,6 +59,7 @@
       "deploy": "https://my-app.com",
       "vault": "01_MyApp",
       "priority": 1,
+      "sessions": { "include": ["My App"], "exclude": [] },
       "tasks": { "include": ["My App"], "exclude": [] }
     },
     {
@@ -36,6 +70,7 @@
       "vault": null,
       "priority": 3,
       "board": false,
+      "sessions": { "include": ["Landing"], "exclude": [] },
       "tasks": { "include": ["Landing"], "exclude": [] }
     }
   ]

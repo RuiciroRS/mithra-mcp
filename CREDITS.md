@@ -21,10 +21,8 @@ Mithra MCP stands on other people's work. Thanks to:
   **[Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)** — the markdown board format
   `get_board` parses.
 
-## Sibling project
-
-- **[Mithra UI](https://github.com/RuiciroRS/mithra-ui)** — the local GUI half of the same
-  command-center: a project rail, embedded real Claude terminals, boards and tasks in one
-  window. Same workspace, different surface.
+- **[xterm.js](https://xtermjs.org)**, **[node-pty](https://github.com/microsoft/node-pty)**,
+  **[ws](https://github.com/websockets/ws)** and **[Express](https://expressjs.com)** — the
+  GUI's embedded terminal and the server behind it.
 
 Licensed [MIT](LICENSE).

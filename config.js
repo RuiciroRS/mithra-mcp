@@ -1,4 +1,4 @@
-// Mithra MCP — configuration loading.
+// Mithra — configuration loading, shared by both surfaces (the MCP server and the GUI).
 // A single `mithra.config.json` (next to this file, gitignored) defines everything
 // user-specific: where your projects live, which Obsidian vault to read, which
 // TASKS.md to parse, and the project map itself. If it's missing, Mithra falls back
@@ -6,29 +6,71 @@
 // defaults. Nothing about one particular workspace is baked into the code.
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Folders that never count as a "project" during the auto scan.
+// Folders that never count as a "project" during the auto scan. Mithra's own folder
+// is skipped by name, whatever you called it when you cloned or forked.
 const SCAN_IGNORE = new Set([
   'node_modules', '.git', '.next', 'dist', 'build', 'out', '.vs', '.idea',
   'Binaries', 'Intermediate', 'Saved', 'DerivedDataCache', '.vscode', '.cache',
-  'mithra-mcp', // don't list yourself unless the user asks for it explicitly
+  path.basename(__dirname), // don't list yourself unless the user asks for it explicitly
 ]);
 
+// Default skills for the GUI's skill chips (Claude Code ships several; tune in your config).
+const DEFAULT_SKILLS = [
+  { label: 'Code Review',   cmd: '/code-review ' },
+  { label: 'Deep Research', cmd: '/deep-research ' },
+  { label: 'Simplify',      cmd: '/simplify ' },
+  { label: 'Run',           cmd: '/run ' },
+];
+
 const DEFAULTS = {
+  // Shared by both surfaces.
   root: '..',                        // where your projects live (relative to this folder, or absolute)
   tasksFile: 'TASKS.md',             // cross-project source of truth, at the root
-  manualTaskMarkers: ['(tú)', '(you)'], // a task carrying one of these is yours to do by hand
+  manualTaskMarkers: ['(you)'],      // a task carrying one of these is yours to do by hand
   vault: null,                       // { dir, sessionsDir, boardFile } or null if you don't use Obsidian
   projects: 'auto',                  // 'auto' = scan root; or an explicit array
+  // GUI only — the MCP server ignores these.
+  appName: 'Mithra',
+  host: '127.0.0.1',                 // NEVER expose to the network: the terminal launches claude.
+  port: 7777,
+  lang: 'en',                        // 'en' | 'es'
+  theme: 'solar',                    // see ui/public/themes.css
+  claudeBin: 'auto',                 // 'auto' = look it up on PATH; or an absolute path
+  docFiles: ['CURRENT_FIRE.md', 'CLAUDE.md', 'AGENTS.md', 'README.md'],
+  workingMemoryFile: 'WORKING_MEMORY.md',
+  workingMemoryCap: 2000,
+  skills: DEFAULT_SKILLS,
 };
 
 // Resolve a path that may be absolute or relative to `base`.
 function resolveFrom(base, p) {
   if (!p) return base;
   return path.isAbsolute(p) ? p : path.resolve(base, p);
+}
+
+// Look up the claude executable on PATH (where/which). Returns null if it isn't there.
+// Only the GUI needs this — it launches a real Claude CLI in the embedded terminal.
+function detectClaude() {
+  const cmd = process.platform === 'win32' ? 'where' : 'which';
+  for (const name of ['claude', 'claude.exe', 'claude.cmd']) {
+    try {
+      const out = execFileSync(cmd, [name], { encoding: 'utf8' }).trim();
+      const first = out.split(/\r?\n/).find(Boolean);
+      if (first && fs.existsSync(first)) return first;
+    } catch { /* keep looking */ }
+  }
+  // Common Claude Code install locations.
+  const guesses = process.platform === 'win32'
+    ? [path.join(os.homedir(), '.local', 'bin', 'claude.exe')]
+    : [path.join(os.homedir(), '.local', 'bin', 'claude'), '/usr/local/bin/claude', '/opt/homebrew/bin/claude'];
+  for (const g of guesses) { if (fs.existsSync(g)) return g; }
+  return null;
 }
 
 // Scan `root` for subfolders that look like projects (a git repo, or carrying a
@@ -74,6 +116,7 @@ export function loadConfig() {
   }
 
   const cfg = { ...DEFAULTS, ...user };
+  cfg.vault = user.vault === undefined ? DEFAULTS.vault : user.vault; // explicit null must survive
 
   // MITHRA_DOCS wins over the config file: it's how MCP clients point the server at
   // a workspace without editing files (see the claude_desktop_config.json example).
@@ -102,6 +145,26 @@ export function loadConfig() {
     cfg.projectsMode = 'explicit';
   }
 
+  // GUI only: listening port and the claude binary the embedded terminal launches.
+  cfg.port = Number(process.env.MITHRA_PORT) || cfg.port;
+  cfg.claudeBin = (cfg.claudeBin === 'auto' || !cfg.claudeBin) ? detectClaude() : cfg.claudeBin;
+
   cfg.source = source;
+  cfg.__dirname = __dirname;
   return cfg;
+}
+
+// What the GUI's front-end needs to know (language, theme, skills, name). Exposes no paths.
+export function publicConfig(cfg) {
+  return {
+    appName: cfg.appName,
+    lang: cfg.lang,
+    theme: cfg.theme,
+    skills: cfg.skills,
+    hasVault: !!cfg.vaultRoot,
+    boardFile: cfg.boardFile,
+    tasksFile: cfg.tasksFile,
+    projectsMode: cfg.projectsMode,
+    claudeReady: !!cfg.claudeBin,
+  };
 }

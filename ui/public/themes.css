@@ -1,0 +1,56 @@
+/* Mithra UI — themes. Each theme redefines the same 9 variables; the rest of
+   styles.css consumes them. Applied via <html data-theme="...">, which app.js sets
+   from mithra.config.json. solar = default (Mithra's own look). */
+
+/* ☉ SOLAR — gold/amber, Mithra's own look (default) */
+:root,
+:root[data-theme="solar"] {
+  --gold: #f5c542;
+  --gold-soft: #e0a83a;
+  --amber: #f0d9a8;
+  --bg0: #120c06;
+  --bg1: #1c1409;
+  --line: rgba(245, 197, 66, 0.22);
+  --line-soft: rgba(245, 197, 66, 0.10);
+  --glow: rgba(245, 197, 66, 0.16);
+  --glow2: rgba(224, 168, 58, 0.10);
+}
+
+/* ☾ MIDNIGHT — azul/cian frío */
+:root[data-theme="midnight"] {
+  --gold: #5ec8f5;
+  --gold-soft: #3a9fe0;
+  --amber: #cfe4f0;
+  --bg0: #06090f;
+  --bg1: #0b1420;
+  --line: rgba(94, 200, 245, 0.22);
+  --line-soft: rgba(94, 200, 245, 0.10);
+  --glow: rgba(94, 200, 245, 0.16);
+  --glow2: rgba(58, 159, 224, 0.10);
+}
+
+/* ❦ FOREST — verde/lima */
+:root[data-theme="forest"] {
+  --gold: #7fd97f;
+  --gold-soft: #4faf5a;
+  --amber: #d4f0cf;
+  --bg0: #06100a;
+  --bg1: #0c1c12;
+  --line: rgba(127, 217, 127, 0.22);
+  --line-soft: rgba(127, 217, 127, 0.10);
+  --glow: rgba(127, 217, 127, 0.15);
+  --glow2: rgba(79, 175, 90, 0.10);
+}
+
+/* ◐ MONO — neutral graphite (for anyone who doesn't want a brand colour) */
+:root[data-theme="mono"] {
+  --gold: #d8d8d8;
+  --gold-soft: #a8a8a8;
+  --amber: #e6e6e6;
+  --bg0: #0c0c0d;
+  --bg1: #16161a;
+  --line: rgba(216, 216, 216, 0.20);
+  --line-soft: rgba(216, 216, 216, 0.09);
+  --glow: rgba(216, 216, 216, 0.10);
+  --glow2: rgba(168, 168, 168, 0.07);
+}

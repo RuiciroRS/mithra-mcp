@@ -164,7 +164,35 @@ Mithra defaults to `root: ".."` and **auto-scans the parent folder** for git rep
 
 ## The GUI
 
-`npm start` opens one local window over every repo — the surface I actually keep open:
+`npm start` opens one local window over every repo — the surface I actually keep open.
+
+Every screenshot below is the demo workspace (`npm run demo:ui`), so the projects,
+commits and tasks on screen are fabricated. Nothing here is anyone's real work.
+
+**Ask it what to do next, and it answers from the actual state of your repos** — commits,
+staged files, task list, and the design docs sitting in your vault:
+
+![The embedded agent reasoning across repos](docs/gui-agent.png)
+
+That is not a chat box with a system prompt. It is the Claude Code CLI in a pty, reading the
+same workspace the MCP tools expose — so it can run `git` itself and cross the answer with
+your board:
+
+![The agent running git against the workspace](docs/gui-agent-tools.png)
+
+**Tasks** are parsed straight out of `TASKS.md`, and the ones only you can do are flagged:
+
+![The tasks tab](docs/gui-tasks.png)
+
+**Designs** renders the specs in your vault next to the repo they belong to:
+
+![The designs tab](docs/gui-designs.png)
+
+**Boards** are your Kanban files, read in place — no second source of truth:
+
+![The board tab](docs/gui-board.png)
+
+What is in the window:
 
 - **Project rail** — every project with its branch, uncommitted count and last commit, live.
 - **A real embedded terminal.** Not a chat box: the actual Claude Code CLI, running in a pty

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 export const DEMO_ROOT = path.join(os.tmpdir(), 'mithra-demo-workspace');
 
@@ -116,6 +117,43 @@ const BOARDS = {
   }),
 };
 
+// Design docs: any .md in the project's vault folder that isn't the board.
+// A nested folder becomes the group header, so the tab shows real structure.
+const DESIGNS = {
+  '01_WebApp': {
+    'specs/Idempotency keys.md':
+      '# Idempotency keys\n\nEvery payment intent carries a client-generated key. Replays return the\noriginal result instead of charging twice.\n\n- Key is scoped to the customer, not the session.\n- Stored for 24h, then the request is treated as new.\n- The PSP webhook is the source of truth; our record is a cache.\n',
+    'specs/Webhook retry policy.md':
+      '# Webhook retry policy\n\nExponential backoff with jitter, capped at six attempts over ~4 hours.\nAfter that the event lands in a dead-letter queue and pages nobody — it\nshows up on the board instead.\n\n| Attempt | Delay |\n|---|---|\n| 1 | 30s |\n| 2 | 2m |\n| 3 | 10m |\n| 6 | 2h |\n',
+    'Pricing notes.md':
+      '# Pricing notes\n\nUsage-based tier is still an idea, not a plan. Open question: do we meter\nrequests or successful checkouts? Metering failures punishes the customer\nfor our downtime.\n',
+  },
+  '02_Landing': {
+    'Above the fold.md':
+      '# Above the fold\n\nOne claim, one proof, one action. Everything else scrolls.\n\nThe headline test is queued behind the analytics pixel — without\nattribution we cannot read the result.\n',
+    'notes/Copy review.md':
+      '# Copy review\n\nCut the adjectives. The value prop should survive being read out loud by\nsomeone who has never seen the product.\n',
+  },
+  '03_Api': {
+    'specs/Refresh token rotation.md':
+      '# Refresh-token rotation\n\nEach refresh issues a new token and invalidates the old one. Reuse of a\nretired token means the token was stolen: kill the whole family and force\na re-login.\n\nDetection matters more than prevention here.\n',
+    'specs/Rate limits.md':
+      '# Per-client rate limits\n\nToken bucket per API key, not per IP — clients sit behind shared egress.\nBurst of 100, refill 10/s. 429 carries `Retry-After`.\n',
+  },
+};
+
+// Session logs: dated notes in a shared folder, filtered per project by name.
+const SESSIONS = [
+  { days: 1, name: 'web-app — checkout hardening',
+    body: 'Walked the retry path end to end. The webhook handler was swallowing\n5xx from the PSP and acking anyway, so failures looked like successes.\nFixed, and the dead-letter queue now surfaces on the board.\n' },
+  { days: 5, name: 'web-app — idempotency backfill',
+    body: 'Backfilled keys for intents created before the migration. 1.2M rows,\nchunked at 5k. No downtime, but the index rebuild took longer than the\nwrite itself.\n' },
+  { days: 12, name: 'landing — headline test',
+    body: 'Wrote three variants. Parked until the pixel is live: shipping a test\nwe cannot measure is just shipping a guess.\n' },
+  { days: 20, name: 'api — token rotation',
+    body: 'Rotation works. The interesting part was reuse detection — a retired\ntoken coming back is the only signal that separates theft from a race\nbetween two tabs.\n' },
+];
+
 const git = (cwd, args, env = {}) =>
   execFileSync('git', ['-c', 'user.name=Mithra Demo', '-c', 'user.email=demo@example.com', ...args],
     { cwd, env: { ...process.env, ...env }, stdio: 'pipe' });
@@ -171,16 +209,37 @@ export function buildDemoWorkspace() {
     fs.writeFileSync(path.join(vault, folder, 'Board.md'), md);
   }
 
+  // Design docs, so the Designs tab has something to render.
+  for (const [folder, files] of Object.entries(DESIGNS)) {
+    for (const [rel, body] of Object.entries(files)) {
+      const full = path.join(vault, folder, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, body);
+    }
+  }
+
+  // Session logs — "YYYY-MM-DD title.md", which is how the server parses them.
+  const sessionsDir = path.join(vault, 'Sessions');
+  fs.mkdirSync(sessionsDir, { recursive: true });
+  for (const s of SESSIONS) {
+    const date = isoDaysAgo(s.days).slice(0, 10);
+    fs.writeFileSync(
+      path.join(sessionsDir, `${date} ${s.name}.md`),
+      `# ${s.name}\n\n_${date}_\n\n${s.body}`
+    );
+  }
+
   // The config the server reads when MITHRA_DEMO is set (see config.js).
   const cfg = {
     root: DEMO_ROOT,
     tasksFile: 'TASKS.md',
     manualTaskMarkers: ['(you)'],
-    vault: { dir: 'DemoVault', boardFile: 'Board.md' },
+    vault: { dir: 'DemoVault', sessionsDir: 'Sessions', boardFile: 'Board.md' },
     projects: PROJECTS.map((p) => ({
       name: p.name, dir: p.name, type: p.type, deploy: p.deploy,
       vault: p.vault, priority: p.priority,
       tasks: { include: [p.name], exclude: [] },
+      sessions: { include: [p.name], exclude: [] },
     })),
   };
   const cfgPath = path.join(DEMO_ROOT, 'mithra.demo.config.json');
@@ -188,8 +247,10 @@ export function buildDemoWorkspace() {
   return { root: DEMO_ROOT, configPath: cfgPath };
 }
 
-// Run directly: build and report.
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`) {
+// Run directly: build and report. pathToFileURL, not string surgery: on Windows
+// import.meta.url is file:///C:/... (three slashes) and a hand-built file://C:/...
+// never matched, so running this file directly did nothing at all.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { root, configPath } = buildDemoWorkspace();
   console.log(`demo workspace ready: ${root}`);
   console.log(`config:              ${configPath}`);

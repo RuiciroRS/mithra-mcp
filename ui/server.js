@@ -9,6 +9,7 @@ import pty from 'node-pty';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
+import os from 'node:os';
 import { loadConfig, publicConfig } from '../config.js';
 
 const execFileP = promisify(execFile);
@@ -528,6 +529,37 @@ app.post('/api/git/commit', async (req, res) => {
     res.status(500).json({ error: String(e?.stderr || e?.message || e).trim(), steps });
   }
 });
+
+// --- Pasted / dropped images ----------------------------------------------
+// A terminal carries text and nothing else, so an image pasted into the window
+// can never reach the agent through the pty. Instead we write it to a temp file
+// and type that path into the prompt: the CLI reads images off disk just fine.
+// Outside the workspace on purpose — pasting a screenshot should not dirty a repo.
+const IMAGE_DIR = path.join(os.tmpdir(), 'mithra-images');
+const IMAGE_TYPES = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
+
+app.post(
+  '/api/image',
+  express.raw({ type: Object.keys(IMAGE_TYPES), limit: '25mb' }),
+  (req, res) => {
+    const ext = IMAGE_TYPES[String(req.headers['content-type']).split(';')[0].trim()];
+    if (!ext) return res.status(415).json({ error: 'unsupported image type' });
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty image' });
+    try {
+      fs.mkdirSync(IMAGE_DIR, { recursive: true });
+      const file = path.join(IMAGE_DIR, `img-${Date.now()}.${ext}`);
+      fs.writeFileSync(file, req.body);
+      res.json({ path: file });
+    } catch (e) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  }
+);
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });

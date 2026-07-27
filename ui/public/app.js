@@ -84,6 +84,65 @@ function scheduleReconnectTerm(t) {
   if (t.reconnectTimer || t.closing) return;
   t.reconnectTimer = setTimeout(() => { t.reconnectTimer = null; if (!t.closing) connectTerm(t); }, 1200);
 }
+// ------------------------------------------------------------------ Images --
+// xterm is text-only: an image pasted or dropped here cannot travel down the pty.
+// So we upload it, and type the resulting path into the prompt — the CLI opens
+// images off disk. Paste (ctrl+V) and drag-and-drop both land here.
+async function sendImage(blob) {
+  const t = activeTerm();
+  if (!t) return;
+  if (!t.ws || t.ws.readyState !== 1) {
+    // No live session to type into: say so instead of dropping the image silently.
+    if (t.term) t.term.write("\r\n\x1b[31m☉ no terminal session — image not sent\x1b[0m\r\n");
+    return;
+  }
+  openDrawer();
+  try {
+    const res = await fetch("/api/image", {
+      method: "POST",
+      headers: { "Content-Type": blob.type },
+      body: blob,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    // Quoted: temp paths on Windows sit under a profile folder that may have spaces.
+    t.ws.send(JSON.stringify({ t: "i", d: `"${data.path}" ` }));
+    t.term.focus();
+  } catch (e) {
+    t.term.write(`\r\n\x1b[31m☉ image failed: ${e.message}\x1b[0m\r\n`);
+  }
+}
+
+document.addEventListener("paste", (e) => {
+  const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+  if (!item) return;              // plain text paste: leave it to xterm
+  const blob = item.getAsFile();
+  if (!blob) return;
+  e.preventDefault();
+  sendImage(blob);
+});
+
+let dragDepth = 0;
+document.addEventListener("dragenter", (e) => {
+  if (![...(e.dataTransfer?.types || [])].includes("Files")) return;
+  dragDepth++;
+  document.body.classList.add("dropping");
+});
+document.addEventListener("dragleave", () => {
+  if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dropping"); }
+});
+document.addEventListener("dragover", (e) => {
+  if ([...(e.dataTransfer?.types || [])].includes("Files")) e.preventDefault();
+});
+document.addEventListener("drop", (e) => {
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith("image/"));
+  if (!files.length) return;
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dropping");
+  files.forEach(sendImage);
+});
+
 // Only fit while the drawer is visible (if height=0, xterm sizes itself to 0 rows).
 function fitTerm(t) {
   if (!t || drawer.classList.contains("collapsed")) return;

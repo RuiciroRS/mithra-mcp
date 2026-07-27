@@ -12,6 +12,7 @@
     "dev": "node --watch ui/server.js",
     "mcp": "node index.js",
     "demo": "node demo/run-demo.mjs",
+    "demo:ui": "node demo/run-demo-ui.mjs",
     "smoke": "node test-smoke.mjs",
     "test:protocol": "node test-protocol.mjs"
   },

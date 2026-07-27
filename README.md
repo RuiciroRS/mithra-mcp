@@ -172,6 +172,12 @@ Mithra defaults to `root: ".."` and **auto-scans the parent folder** for git rep
   Skill chips above it type `/code-review`, `/deep-research`… into the prompt.
 - **Boards, tasks, docs, sessions** — the same reads the MCP tools expose, rendered.
 - **One-click commit** for the small stuff that doesn't deserve a terminal.
+- **Paste or drop an image** anywhere in the window. A terminal only carries text, so the
+  image is written to a temp file and its path typed into the prompt — the CLI reads it
+  from disk. Screenshots stop being a reason to leave the window.
+
+Want to see it without configuring anything? `npm run demo:ui` opens the same window over the
+throwaway demo workspace, on its own port, so nothing of yours is on screen.
 
 **It binds to `127.0.0.1` and nothing else, on purpose.** That terminal launches a real Claude
 CLI with your credentials; exposing it to a network would hand anyone on it a shell. There is
@@ -234,6 +240,7 @@ GUI-only keys — the MCP server ignores them: `appName`, `lang` (`en`/`es`), `t
 
 ```bash
 npm run demo            # throwaway workspace + a walk through all six tools
+npm run demo:ui         # the GUI over that same workspace, on port 7788
 npm run smoke           # data layer against your real workspace, per-tool pass/fail
 npm run test:protocol   # boots the server and drives it through a real MCP client
 ```

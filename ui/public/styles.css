@@ -355,3 +355,14 @@ html, body {
 .kanban::-webkit-scrollbar, .kb-cards::-webkit-scrollbar, .vault-list::-webkit-scrollbar { width: 9px; height: 9px; }
 #rail::-webkit-scrollbar-thumb, #view::-webkit-scrollbar-thumb, .doc-body::-webkit-scrollbar-thumb,
 .kanban::-webkit-scrollbar-thumb, .kb-cards::-webkit-scrollbar-thumb, .vault-list::-webkit-scrollbar-thumb { background: rgba(245,197,66,.2); border-radius: 9px; }
+
+/* arrastrar una imagen a la ventana: overlay de destino */
+body.dropping::after {
+  content: "";
+  position: fixed; inset: 10px;
+  border: 2px dashed rgba(245,197,66,.55);
+  border-radius: 14px;
+  background: rgba(245,197,66,.05);
+  pointer-events: none;
+  z-index: 9999;
+}

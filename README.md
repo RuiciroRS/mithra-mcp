@@ -159,6 +159,10 @@ npm start              # the GUI, on http://127.0.0.1:7777
 npm run mcp            # the MCP server, on stdio
 ```
 
+> **Sharing your screen?** `smoke` and `test:protocol` run against *your* workspace and print
+> real task text, so they will happily show your private projects to a room. Use
+> `npm run demo` instead — same six tools, throwaway workspace, nothing of yours in the output.
+
 **Zero-config:** drop this folder *next to your repos* and skip the config file entirely —
 Mithra defaults to `root: ".."` and **auto-scans the parent folder** for git repos.
 

@@ -1,6 +1,6 @@
 {
   "name": "mithra-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A local command center for a one-person, multi-project workspace: a GUI over every repo (project rail, embedded Claude terminal, boards, tasks) and the same workspace exposed as read-only MCP tools. One config file drives both.",
   "type": "module",
   "main": "index.js",

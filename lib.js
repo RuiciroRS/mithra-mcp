@@ -28,6 +28,27 @@ export const PROJECTS = CFG.projects;
 
 const lc = (s) => String(s).toLowerCase();
 
+// --- Provenance -----------------------------------------------------------
+// Every payload carries `sources`: the repo and the file each answer was read
+// from. It's an array because some answers cross two origins (a repo's git log
+// plus the shared TASKS.md). Shared files report repo:null and list, in `match`,
+// the declared filters that assigned that content to the project — ownership in
+// Mithra is declared in the config, never inferred, so an answer can show its work.
+// Paths are workspace-relative whenever possible: pasting output into an issue
+// shouldn't leak your home directory.
+function relPath(full) {
+  if (!full) return null;
+  const r = path.relative(DOCS, full);
+  return (!r || r.startsWith('..') ? full : r).replace(/\\/g, '/');
+}
+
+// via: 'git' | 'fs' | 'vault' | 'tasks' | 'http'
+function src(via, { repo = null, file = null, match = null } = {}) {
+  const s = { repo, file: relPath(file), via };
+  if (match?.length) s.match = [...match];
+  return s;
+}
+
 // A task carrying one of these markers is a manual action of yours (not delegable).
 const MANUAL_MARKERS = (CFG.manualTaskMarkers || []).map(lc);
 const isManual = (text) => MANUAL_MARKERS.some((m) => lc(text).includes(m));
@@ -78,7 +99,7 @@ async function gitProject(p) {
     const [b, a] = rl.stdout.trim().split(/\s+/).map(Number);
     behind = b; ahead = a;
   } catch { /* no upstream configured */ }
-  return { name: p.name, dir: p.dir, type: 'git', deploy: p.deploy || null, branch: branch.stdout.trim(), dirty, lastCommit: changes[0] || null, recent: changes, staleDays, ahead, behind };
+  return { name: p.name, dir: p.dir, type: 'git', deploy: p.deploy || null, branch: branch.stdout.trim(), dirty, lastCommit: changes[0] || null, recent: changes, staleDays, ahead, behind, sources: [src('git', { repo: p.dir })] };
 }
 
 function recentFiles(root, max = 5) {
@@ -108,7 +129,7 @@ function fsProject(p) {
   const recent = recentFiles(root, 5).map((f) => ({
     hash: null, msg: f.rel.replace(/\\/g, '/'), date: new Date(f.mtime).toISOString(), ago: relTime(f.mtime),
   }));
-  return { name: p.name, dir: p.dir, type: 'fs', deploy: p.deploy || null, branch: null, dirty: 0, lastCommit: recent[0] || null, recent };
+  return { name: p.name, dir: p.dir, type: 'fs', deploy: p.deploy || null, branch: null, dirty: 0, lastCommit: recent[0] || null, recent, sources: [src('fs', { repo: p.dir })] };
 }
 
 // --- Data tools (what index.js exposes over MCP) --------------------------
@@ -121,7 +142,7 @@ export async function listProjects() {
     try {
       projects.push(p.type === 'git' ? await gitProject(p) : fsProject(p));
     } catch (e) {
-      projects.push({ name: p.name, dir: p.dir, type: p.type, deploy: p.deploy || null, error: String(e?.message || e) });
+      projects.push({ name: p.name, dir: p.dir, type: p.type, deploy: p.deploy || null, error: String(e?.message || e), sources: [src(p.type === 'git' ? 'git' : 'fs', { repo: p.dir })] });
     }
   }
   return { generatedAt: new Date().toISOString(), projects };
@@ -152,12 +173,16 @@ function parseBoard(md) {
 export function getBoard(nameOrDir) {
   const proj = findProject(nameOrDir);
   if (!proj) throw new Error(`unknown project: "${nameOrDir}"`);
-  if (!VAULT) return { project: proj.name, columns: [], note: 'no vault configured' };
-  if (proj.board === false) return { project: proj.name, columns: [], note: 'no board of its own (shares another project\'s)' };
-  if (!proj.vault) return { project: proj.name, columns: [], note: 'no vault folder mapped' };
+  // Nothing read = nothing to cite: `sources` stays empty rather than pointing at
+  // a file this answer never opened.
+  if (!VAULT) return { project: proj.name, columns: [], note: 'no vault configured', sources: [] };
+  if (proj.board === false) return { project: proj.name, columns: [], note: 'no board of its own (shares another project\'s)', sources: [] };
+  if (!proj.vault) return { project: proj.name, columns: [], note: 'no vault folder mapped', sources: [] };
   const full = path.join(VAULT, proj.vault, CFG.boardFile);
   const md = fs.readFileSync(full, 'utf8');
-  return { project: proj.name, columns: parseBoard(md) };
+  // repo:null — the board lives in the vault, not in the repo. `match` is the vault
+  // folder the config declares for this project, which is what made it its board.
+  return { project: proj.name, columns: parseBoard(md), sources: [src('vault', { file: full, match: [proj.vault] })] };
 }
 
 // Parse TASKS.md: ## Status -> ### Project -> - [ ]/[x] item.
@@ -185,7 +210,7 @@ export function getTasks(nameOrDir, { openOnly = true } = {}) {
   const proj = findProject(nameOrDir);
   if (!proj) throw new Error(`unknown project: "${nameOrDir}"`);
   const m = proj.tasks;
-  if (!m || !m.include?.length) return { project: proj.name, groups: [], note: 'no task mapping' };
+  if (!m || !m.include?.length) return { project: proj.name, groups: [], note: 'no task mapping', sources: [] };
   const md = fs.readFileSync(TASKS_FILE, 'utf8');
   const groups = parseTasks(md)
     .filter((g) => {
@@ -196,7 +221,9 @@ export function getTasks(nameOrDir, { openOnly = true } = {}) {
     })
     .map((g) => ({ ...g, items: openOnly ? g.items.filter((i) => !i.done) : g.items }))
     .filter((g) => g.items.length > 0);
-  return { project: proj.name, groups };
+  // repo:null — these tasks come from the shared TASKS.md at the workspace root, not
+  // from the project's repo. `match` = the declared include filters that claimed them.
+  return { project: proj.name, groups, sources: [src('tasks', { file: TASKS_FILE, match: m.include })] };
 }
 
 // Today's standup: commits since midnight + open-task counts, per project.
@@ -206,8 +233,9 @@ export async function dailyStandup() {
   try { taskGroups = parseTasks(fs.readFileSync(TASKS_FILE, 'utf8')); } catch {}
   const out = [];
   for (const p of PROJECTS) {
-    const entry = { name: p.name, dir: p.dir, commits: [] };
+    const entry = { name: p.name, dir: p.dir, commits: [], sources: [] };
     if (p.type === 'git') {
+      entry.sources.push(src('git', { repo: p.dir }));
       try {
         const cwd = path.join(DOCS, p.dir);
         const log = await execFileP('git', ['-C', cwd, 'log', '--since=midnight', `--format=%h${sep}%s${sep}%cr`]);
@@ -219,6 +247,7 @@ export async function dailyStandup() {
     }
     const m = p.tasks;
     if (m?.include?.length) {
+      entry.sources.push(src('tasks', { file: TASKS_FILE, match: m.include }));
       entry.openTasks = taskGroups
         .filter((g) => m.include.some((k) => lc(g.heading).includes(lc(k))) && !(m.exclude || []).some((k) => lc(g.heading).includes(lc(k))))
         .flatMap((g) => g.items).filter((i) => !i.done).length;
@@ -250,7 +279,9 @@ async function pingURL(url) {
 export async function deployHealth() {
   const targets = PROJECTS.filter((p) => p.deploy);
   const entries = await Promise.all(
-    targets.map(async (p) => [p.name, { url: p.deploy, ...(await pingURL(p.deploy)) }])
+    // The URL itself is declared by the project in the config — that's the repo the
+    // reading belongs to, even though the measurement comes off the wire.
+    targets.map(async (p) => [p.name, { url: p.deploy, ...(await pingURL(p.deploy)), sources: [src('http', { repo: p.dir })] }])
   );
   return { checkedAt: new Date().toISOString(), health: Object.fromEntries(entries) };
 }
@@ -315,6 +346,12 @@ export async function nextActions({ limit = 5 } = {}) {
       suggestedTask: suggested,
       flags,
       signal: { openTasks: open.length, youTasks: youOpen.length, dirty, ahead, behind: sig.behind ?? null, staleDays: stale ?? null },
+      // This one genuinely crosses two origins: the repo's own state and the shared
+      // TASKS.md. Both get cited, so a ranking can be audited instead of trusted.
+      sources: [
+        src(p.type === 'git' ? 'git' : 'fs', { repo: p.dir }),
+        ...(p.tasks?.include?.length ? [src('tasks', { file: TASKS_FILE, match: p.tasks.include })] : []),
+      ],
     };
   }).filter(Boolean);
 

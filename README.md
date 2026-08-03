@@ -69,6 +69,24 @@ dominates; pending work (open tasks, unpushed commits, dirty trees, staleness) b
 surfaces a low-priority project that's quietly piling up. The model gets *a decision*, not a
 dashboard to interpret.
 
+Every response carries `sources`, so an answer can be checked instead of trusted:
+
+```jsonc
+// get_tasks("landing") → read from a file shared by every project
+"sources": [{ "repo": null, "file": "TASKS.md", "via": "tasks", "match": ["landing"] }]
+
+// next_actions() → one action, two origins
+"sources": [
+  { "repo": "landing", "file": null, "via": "git" },
+  { "repo": null, "file": "TASKS.md", "via": "tasks", "match": ["landing"] }
+]
+```
+
+It's an array because some answers cross two origins. `repo` is null when the content came from
+a file shared across projects rather than from a repo, and `match` then names the declared config
+filter that assigned that section to this project — see [Cross-repo ownership](#cross-repo-ownership).
+Paths are workspace-relative, so output can be pasted into an issue without leaking a home directory.
+
 ## See it work in 30 seconds
 
 No config, no repos of your own involved: `npm run demo` builds a throwaway workspace in your
@@ -96,17 +114,21 @@ building a throwaway workspace (3 fake repos, real git history)…
   1. web-app — priority #1 · 4 open task(s)
      → Wire the checkout webhook to the retry queue
      ⚑ 1 uncommitted file(s) · 1 manual task(s) of yours
+     src: web-app/git  +  TASKS.md ← web-app
   2. landing — priority #3 · 2 open task(s) · unpushed work
      → Add the analytics pixel to the lead form
      ⚑ 2 unpushed commit(s) · untouched for 14d · 1 manual task(s) of yours
+     src: landing/git  +  TASKS.md ← landing
   3. api — priority #2 · 1 open task(s)
      → Rate-limit the token endpoint per client, not per IP
+     src: api/git  +  TASKS.md ← api
 
 ── get_tasks ─────────────────────────────────────────────────
 "what is open on the landing page?"
   [Active] landing
     - Add the analytics pixel to the lead form
     - (you) Pick the headline variant for the A/B test  (yours, manual)
+     src: TASKS.md ← landing
 
 ── get_board ─────────────────────────────────────────────────
 "where is the web app right now?"
@@ -114,13 +136,14 @@ building a throwaway workspace (3 fake repos, real git history)…
   Next         Retry queue for webhooks, Idempotency backfill
   In progress  Checkout hardening
   Done         Payment-intent migration, PSP sandbox parity
+     src: DemoVault/01_WebApp/Board.md ← 01_WebApp
 
 ── deploy_health ─────────────────────────────────────────────
 "is prod up?"
   ● web-app    200 · 481ms · https://example.com
   ● landing    200 · 456ms · https://example.org
 
-6 tools, read-only, over stdio. No network port, no cloud.
+6 tools, read-only, over stdio. Every answer cites the repo and file behind it.
 ```
 
 Note `landing`: priority #3, but it surfaces above `api` because two commits are sitting
@@ -144,6 +167,20 @@ These were deliberate, and they're the interesting part:
   testable without standing up a server (`npm run smoke`).
 - **Zero workspace assumptions.** Everything user-specific lives in one gitignored config file;
   the code knows nothing about any particular set of projects.
+- **Answers cite their origin.** Every payload carries `sources` (see above). An agent reporting
+  cross-repo state should be auditable, not persuasive.
+
+### Cross-repo ownership
+
+When the same interface, task heading or board column shows up across several services, Mithra
+doesn't guess which repo owns it — the config does. Each project is an explicit entry with its
+`dir`, and `tasks.include` / `tasks.exclude` declare which sections of the shared files are
+theirs. Two projects can point at the same folder and split by section.
+
+That's a deliberate trade. Inferring ownership from code or name similarity buys convenience and
+pays for it with confident wrong answers, and a confident wrong answer about who owns a contract
+is expensive to unwind. Declared ownership is boring, hand-maintained, and checkable — which is
+why every response reports the filter that claimed it, in `sources[].match`.
 
 ## Quick start
 

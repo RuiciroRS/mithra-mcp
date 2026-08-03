@@ -5,6 +5,16 @@ import { listProjects, getBoard, getTasks, dailyStandup, deployHealth, nextActio
 
 const rule = (title) => console.log(`\n\x1b[33m── ${title} ${'─'.repeat(Math.max(0, 58 - title.length))}\x1b[0m`);
 const ask = (q) => console.log(`\x1b[2m"${q}"\x1b[0m`);
+// Provenance, the way a client sees it: the repo/file an answer came from, and the
+// declared filter that assigned shared content to that project.
+const cite = (sources = []) => sources.map((s) => {
+  const where = `${s.repo ? `${s.repo}/` : ''}${s.file || s.via}`;
+  return s.match?.length ? `${where} ← ${s.match.join(', ')}` : where;
+}).join('  +  ');
+const src = (sources) => {
+  const c = cite(sources);
+  if (c) console.log(`     \x1b[2msrc: ${c}\x1b[0m`);
+};
 
 rule('list_projects');
 ask('which repos are stale?');
@@ -24,6 +34,7 @@ actions.forEach((a, i) => {
   console.log(`  ${i + 1}. \x1b[1m${a.project}\x1b[0m — ${a.reason}`);
   if (a.suggestedTask) console.log(`     → ${a.suggestedTask}`);
   if (a.flags.length) console.log(`     \x1b[33m⚑ ${a.flags.join(' · ')}\x1b[0m`);
+  src(a.sources);
 });
 
 rule('get_tasks');
@@ -33,6 +44,7 @@ for (const g of tasks.groups) {
   console.log(`  [${g.status}] ${g.heading}`);
   for (const i of g.items) console.log(`    - ${i.text}${i.you ? '  \x1b[33m(yours, manual)\x1b[0m' : ''}`);
 }
+src(tasks.sources);
 
 rule('get_board');
 ask('where is the web app right now?');
@@ -40,6 +52,7 @@ const board = getBoard('web-app');
 for (const c of board.columns) {
   console.log(`  ${c.title.padEnd(12)} ${c.cards.map((x) => x.text).join(', ') || '—'}`);
 }
+src(board.sources);
 
 rule('daily_standup');
 ask('what did I ship today?');
@@ -55,4 +68,4 @@ for (const [name, h] of Object.entries(health)) {
   console.log(`  ${h.ok ? '\x1b[32m●\x1b[0m' : '\x1b[31m●\x1b[0m'} ${name.padEnd(10)} ${h.status} · ${h.ms}ms · ${h.url}`);
 }
 
-console.log('\n\x1b[2m6 tools, read-only, over stdio. No network port, no cloud.\x1b[0m');
+console.log('\n\x1b[2m6 tools, read-only, over stdio. Every answer cites the repo and file behind it.\x1b[0m');

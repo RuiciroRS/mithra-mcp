@@ -680,11 +680,22 @@ async function postJSON(url, body, method = "POST") {
   return d;
 }
 
+// Provenance line: where a view's data was actually read from. Same `sources`
+// contract the MCP tools return — repo/file, plus the declared config filter
+// that assigned shared content (TASKS.md, the vault) to this project.
+function citeOf(sources) {
+  if (!Array.isArray(sources) || !sources.length) return "";
+  return sources.map((s) => {
+    const where = `${s.repo ? `${s.repo}/` : ""}${s.file || s.via}`;
+    return s.match?.length ? `${where} ← ${s.match.join(", ")}` : where;
+  }).join("  +  ");
+}
+
 // ----------------------------------------------------------------- Board -----
 async function renderBoard(p) {
   viewEl.innerHTML = `<div class="rail-loading">${esc(t("bd_loading"))}</div>`;
   try {
-    const { columns } = await getJSON(`/api/board?dir=${encodeURIComponent(p.dir)}`);
+    const { columns, sources } = await getJSON(`/api/board?dir=${encodeURIComponent(p.dir)}`);
     if (proj()?.dir !== p.dir || activeTab !== "board") return;
     if (!columns.length) { viewEl.innerHTML = `<div class="v-empty">${t("bd_empty", { file: esc(CONFIG.boardFile) })}</div>`; return; }
     const board = columns.map((c) => {
@@ -696,7 +707,9 @@ async function renderBoard(p) {
         <div class="kb-cards">${cards}</div>
       </section>`;
     }).join("");
-    viewEl.innerHTML = `<div class="kanban">${board}</div>`;
+    const cite = citeOf(sources);
+    const citeHtml = cite ? `<div class="src-cite">${esc(t("bd_src", { cite }))}</div>` : "";
+    viewEl.innerHTML = `<div class="kanban">${board}</div>${citeHtml}`;
   } catch (e) {
     viewEl.innerHTML = `<div class="v-error">${esc(t("doc_read_err", { e: String(e.message || e) }))}</div>`;
   }
@@ -706,7 +719,7 @@ async function renderBoard(p) {
 async function renderTasks(p) {
   viewEl.innerHTML = `<div class="rail-loading">${esc(t("tk_loading"))}</div>`;
   try {
-    const { groups, note } = await getJSON(`/api/tasks?dir=${encodeURIComponent(p.dir)}`);
+    const { groups, note, sources } = await getJSON(`/api/tasks?dir=${encodeURIComponent(p.dir)}`);
     if (proj()?.dir !== p.dir || activeTab !== "tasks") return;
     if (note) { viewEl.innerHTML = `<div class="v-empty">${esc(t("tk_no_map"))}</div>`; return; } // no mapping
     const all = groups.flatMap((g) => g.items);
@@ -735,7 +748,7 @@ async function renderTasks(p) {
       <div class="tk-head">
         <span class="pill pill-dirty">${esc(t("tk_open", { n: openN }))}</span>
         <span class="pill pill-clean">${esc(t("tk_done", { n: doneN }))}</span>
-        <span class="tk-src">${esc(t("tk_src", { file: CONFIG.tasksFile }))}</span>
+        <span class="tk-src">${esc(t("tk_src", { cite: citeOf(sources) || CONFIG.tasksFile }))}</span>
       </div>
       <form class="tk-add" id="tk-add">
         <input id="tk-add-input" type="text" placeholder="${esc(t("tk_add_ph", { name: p.name }))}" autocomplete="off" />

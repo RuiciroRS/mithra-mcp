@@ -240,6 +240,8 @@ html, body {
 /* ------------------------------------------------------------- tareas ----- */
 .tk-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .tk-src { font-size: 10.5px; letter-spacing: .5px; color: rgba(240, 217, 168, 0.35); margin-left: auto; }
+/* Provenance line under a view: which file/repo the data was read from. */
+.src-cite { font-size: 10.5px; letter-spacing: .5px; color: rgba(240, 217, 168, 0.35); padding: 10px 2px 2px; }
 .tk-groups { display: flex; flex-direction: column; gap: 14px; }
 .tk-group .card-t { display: flex; align-items: baseline; gap: 8px; }
 .tk-status { font-size: 9.5px; letter-spacing: .5px; color: var(--gold-soft); opacity: .65; border: 1px solid var(--line-soft); border-radius: 999px; padding: 1px 7px; }

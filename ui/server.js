@@ -11,6 +11,11 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
 import { loadConfig, publicConfig } from '../config.js';
+// One parser, two surfaces. The GUI used to keep its own copies of parseBoard and
+// parseTasks; identical markdown parsed by two functions is a silent-divergence bug
+// waiting to happen. `src` is the same provenance helper the MCP tools cite with,
+// so both surfaces answer "where did this come from?" the same way.
+import { parseBoard, parseTasks, src } from '../lib.js';
 
 const execFileP = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,8 +47,7 @@ const SESSIONS_DIR = cfg.sessionsDir; // sessions folder inside the vault (or nu
 const PROJECTS = cfg.projects;
 const BOARD_FILE = cfg.boardFile;    // per-project Kanban file name (defaults to 'Board.md')
 const TASKS_FILE = cfg.tasksFile;    // TASKS.md (cross-project) at the root
-// A task carrying one of these markers is yours to do by hand, not delegable.
-const MANUAL_MARKERS = (cfg.manualTaskMarkers || ['(you)']).map((m) => String(m).toLowerCase());
+// (The "yours to do by hand" markers now live with parseTasks, in lib.js.)
 const WM_FILE = cfg.workingMemoryFile;
 const WM_CAP = cfg.workingMemoryCap;
 // Docs the per-project view knows how to render (whitelist; prevents path traversal).
@@ -95,7 +99,7 @@ async function gitProject(p) {
     const [b, a] = rl.stdout.trim().split(/\s+/).map(Number);
     behind = b; ahead = a;
   } catch { /* no upstream configured */ }
-  return { name: p.name, dir: p.dir, type: 'git', deploy: p.deploy || null, docs: docsFor(p), branch: branch.stdout.trim(), dirty, changes, staleDays, ahead, behind, metrics: null };
+  return { name: p.name, dir: p.dir, type: 'git', deploy: p.deploy || null, docs: docsFor(p), branch: branch.stdout.trim(), dirty, changes, staleDays, ahead, behind, metrics: null, sources: [src('git', { repo: p.dir })] };
 }
 
 function recentFiles(root, max = 10) {
@@ -125,7 +129,7 @@ function fsProject(p) {
   const changes = recentFiles(root, 10).map((f) => ({
     hash: null, msg: f.rel.replace(/\\/g, '/'), date: new Date(f.mtime).toISOString(), ago: relTime(f.mtime),
   }));
-  return { name: p.name, dir: p.dir, type: 'fs', deploy: p.deploy || null, docs: docsFor(p), branch: null, dirty: 0, changes, metrics: null };
+  return { name: p.name, dir: p.dir, type: 'fs', deploy: p.deploy || null, docs: docsFor(p), branch: null, dirty: 0, changes, metrics: null, sources: [src('fs', { repo: p.dir })] };
 }
 
 // Read endpoint. Errors are reported per project (visible banner in the panel, not a silent catch).
@@ -135,7 +139,7 @@ app.get('/api/projects', async (req, res) => {
     try {
       projects.push(p.type === 'git' ? await gitProject(p) : fsProject(p));
     } catch (e) {
-      projects.push({ name: p.name, dir: p.dir, type: p.type, deploy: p.deploy || null, docs: [], branch: null, dirty: 0, changes: [], metrics: null, error: String(e?.message || e) });
+      projects.push({ name: p.name, dir: p.dir, type: p.type, deploy: p.deploy || null, docs: [], branch: null, dirty: 0, changes: [], metrics: null, error: String(e?.message || e), sources: [src(p.type === 'git' ? 'git' : 'fs', { repo: p.dir })] });
     }
   }
   res.json({ generatedAt: new Date().toISOString(), root: DOCS, projects });
@@ -169,40 +173,19 @@ function vaultRoot(p) {
   return (VAULT && p.vault) ? path.join(VAULT, p.vault) : null;
 }
 
-// Parses the board file (Obsidian Kanban) -> columns with cards.
-function parseBoard(md) {
-  const text = md.replace(/\r\n/g, '\n').split('%% kanban:settings')[0]; // cut off settings
-  const lines = text.split('\n');
-  const cols = [];
-  let cur = null;
-  let inFront = false;
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    if (i === 0 && raw.trim() === '---') { inFront = true; continue; }
-    if (inFront) { if (raw.trim() === '---') inFront = false; continue; }
-    const h = raw.match(/^##\s+(.*)$/);
-    if (h) { cur = { title: h[1].trim(), cards: [] }; cols.push(cur); continue; }
-    const item = raw.match(/^\s*-\s+\[( |x|X)\]\s+(.*)$/);
-    if (item && cur) {
-      const done = item[1].toLowerCase() === 'x';
-      const text = item[2].replace(/\[\[([^\]]+)\]\]/g, '$1').trim(); // strip wikilinks
-      cur.cards.push({ text, done });
-    }
-  }
-  return cols.filter((c) => c.title.toLowerCase() !== 'complete'); // 'Complete' is an internal marker
-}
+// parseBoard now comes from lib.js — see the import at the top.
 
 // Project board.
 app.get('/api/board', (req, res) => {
   const proj = PROJECTS.find((p) => p.dir === req.query.dir);
   if (!proj) return res.status(404).json({ error: 'unknown project' });
-  if (proj.board === false) return res.json({ columns: [], note: 'no board of its own (shares another project\'s)' });
+  if (proj.board === false) return res.json({ columns: [], note: 'no board of its own (shares another project\'s)', sources: [] });
   const root = vaultRoot(proj);
-  if (!root) return res.json({ columns: [], note: 'no vault folder' });
+  if (!root) return res.json({ columns: [], note: 'no vault folder', sources: [] });
   const full = path.join(root, BOARD_FILE);
   try {
     const md = fs.readFileSync(full, 'utf8');
-    res.json({ columns: parseBoard(md) });
+    res.json({ columns: parseBoard(md), sources: [src('vault', { file: full, match: [proj.vault] })] });
   } catch (e) {
     res.status(404).json({ error: `no ${BOARD_FILE} in ${proj.vault}: ${String(e?.message || e)}` });
   }
@@ -290,35 +273,15 @@ app.get('/api/vaultdoc', (req, res) => {
 // --- Tasks (global TASKS.md) ----------------------------------------------
 // TASKS.md lives at the configured root (the cross-project source of truth from CLAUDE.md).
 // Structure: ## Status (Active/Waiting/Someday/Done) -> ### Project -> - [ ]/[x] item.
-// We parse into groups by ### heading; each group remembers its ## status.
-function parseTasks(md) {
-  const lines = md.replace(/\r\n/g, '\n').split('\n');
-  const groups = [];
-  let status = null;      // current ##
-  let cur = null;         // current ### group
-  for (let n = 0; n < lines.length; n++) {
-    const raw = lines[n];
-    const h2 = raw.match(/^##\s+(.*)$/);
-    if (h2) { status = h2[1].trim(); cur = null; continue; }
-    const h3 = raw.match(/^###\s+(.*)$/);
-    if (h3) { cur = { heading: h3[1].trim(), status, line: n, items: [] }; groups.push(cur); continue; }
-    const item = raw.match(/^\s*-\s+\[( |x|X)\]\s+(.*)$/);
-    if (item && cur) {
-      const done = item[1].toLowerCase() === 'x';
-      const text = item[2].replace(/\[\[([^\]]+)\]\]/g, '$1').trim(); // strip wikilinks
-      const you = MANUAL_MARKERS.some((mk) => text.toLowerCase().includes(mk)); // manual action, done by the user
-      cur.items.push({ text, done, you, line: n }); // line = index in the file (used by the toggle)
-    }
-  }
-  return groups;
-}
+// parseTasks comes from lib.js (see the import at the top). It carries `line` — the
+// 0-based index in the file — which the checkbox toggle below writes back by.
 
 // Project tasks (filters TASKS.md by ### heading).
 app.get('/api/tasks', (req, res) => {
   const proj = PROJECTS.find((p) => p.dir === req.query.dir);
   if (!proj) return res.status(404).json({ error: 'unknown project' });
   const m = proj.tasks;
-  if (!m || !m.include?.length) return res.json({ groups: [], note: 'no task mapping' });
+  if (!m || !m.include?.length) return res.json({ groups: [], note: 'no task mapping', sources: [] });
   const file = path.join(DOCS, TASKS_FILE);
   let md;
   try { md = fs.readFileSync(file, 'utf8'); }
@@ -330,7 +293,9 @@ app.get('/api/tasks', (req, res) => {
     if (m.exclude && m.exclude.some((k) => h.includes(lc(k)))) return false;
     return g.items.length > 0;
   });
-  res.json({ groups });
+  // repo:null — TASKS.md is shared by every project; `match` names the declared
+  // filters that claimed these sections for this one.
+  res.json({ groups, sources: [src('tasks', { file, match: m.include })] });
 });
 
 // --- Deploy health ---------------------------------------------------------
@@ -357,7 +322,7 @@ async function pingURL(url) {
 app.get('/api/health', async (req, res) => {
   const targets = PROJECTS.filter((p) => p.deploy);
   const entries = await Promise.all(
-    targets.map(async (p) => [p.dir, { url: p.deploy, ...(await pingURL(p.deploy)) }])
+    targets.map(async (p) => [p.dir, { url: p.deploy, ...(await pingURL(p.deploy)), sources: [src('http', { repo: p.dir })] }])
   );
   res.json({ checkedAt: new Date().toISOString(), health: Object.fromEntries(entries) });
 });

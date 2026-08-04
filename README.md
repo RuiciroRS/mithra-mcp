@@ -86,6 +86,11 @@ It's an array because some answers cross two origins. `repo` is null when the co
 a file shared across projects rather than from a repo, and `match` then names the declared config
 filter that assigned that section to this project — see [Cross-repo ownership](#cross-repo-ownership).
 Paths are workspace-relative, so output can be pasted into an issue without leaking a home directory.
+Task citations carry a `line` too, so a claim points at the exact row it came from.
+
+**The GUI cites the same way.** Both surfaces parse those files with the same functions in `lib.js`
+and build citations with the same helper, so the board and task views show the file they were read
+from instead of a name copied out of the config.
 
 ## See it work in 30 seconds
 
@@ -169,6 +174,9 @@ These were deliberate, and they're the interesting part:
   the code knows nothing about any particular set of projects.
 - **Answers cite their origin.** Every payload carries `sources` (see above). An agent reporting
   cross-repo state should be auditable, not persuasive.
+- **One parser, two surfaces.** The GUI and the MCP server read the same markdown through the same
+  `parseBoard` / `parseTasks` in `lib.js`. Two copies of a parser drift in silence; the project
+  constructors stay separate because they legitimately return different shapes.
 
 ### Cross-repo ownership
 

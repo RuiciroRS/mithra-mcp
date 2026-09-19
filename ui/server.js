@@ -247,7 +247,7 @@ app.get('/api/runs/run', (req, res) => {
   });
 
   let stamp = id;
-  for (const f of ['events.ndjson', 'run.json']) {
+  for (const f of ['events.ndjson', 'run.json', 'verify.json']) {
     try { stamp += ':' + fs.statSync(path.join(dir, f)).mtimeMs; } catch { /* not there yet */ }
   }
   stamp += ':' + shots.length + ':' + (active === id ? 'live' : 'done');
@@ -257,6 +257,9 @@ app.get('/api/runs/run', (req, res) => {
     run: readJSON(path.join(dir, 'run.json'), {}),
     env: readJSON(path.join(dir, 'env.json'), {}),
     mission: (() => { try { return fs.readFileSync(path.join(dir, 'mission.md'), 'utf8'); } catch { return null; } })(),
+    // verify.json is absent until something declared expectations and checked
+    // them. The panel must show that absence rather than imply a pass.
+    verify: readJSON(path.join(dir, 'verify.json'), null),
     before: readJSON(path.join(dir, 'snapshots', 'before.json'), null),
     after: readJSON(path.join(dir, 'snapshots', 'after.json'), null),
     events, shots: shotMeta,

@@ -202,10 +202,13 @@
     const rows = (v.checks || []).map((c) => {
       const m = { PASS: '✓', FAIL: '✕', ERROR: '!', SKIPPED: '–' }[c.status] || '?';
       const k = { PASS: 'pass', FAIL: 'fail', ERROR: 'err', SKIPPED: 'skip' }[c.status] || '';
+      // Evidence first: a verifier writes the failing sentence in words, and that
+      // sentence is what a person needs. The raw expected/observed follows it.
       const detail = [
+        ...(c.evidence || []).map((x) => `· ${x}`),
+        c.note ? `· ${c.note}` : '',
         c.expected !== undefined ? `${tr('rc_expected')}: ${JSON.stringify(c.expected)}` : '',
         c.observed !== undefined ? `${tr('rc_observed')}: ${JSON.stringify(c.observed)}` : '',
-        ...(c.evidence || []).map((x) => `· ${x}`),
       ].filter(Boolean).join('\n');
       return `<div class="rc-check ${k}" data-check="${esc(c.id)}">
           <span class="mk">${m}</span><span class="nm">${esc(c.id)}</span>

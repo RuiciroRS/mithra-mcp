@@ -105,8 +105,8 @@
 .rc-empty .ico { font-size: 30px; color: #2c343c; }
 
 /* ----------------------------------------------------------------- agent */
-.rc-agent { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px 16px 18px; }
-.rc-core { position: relative; width: 84px; height: 84px; display: grid; place-items: center; }
+.rc-agent { display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 14px 16px 13px; }
+.rc-core { position: relative; width: 66px; height: 66px; display: grid; place-items: center; }
 .rc-core .ring {
   position: absolute; inset: 0; border-radius: 50%;
   border: 1px solid var(--st, var(--rc-cyan)); opacity: .28;
@@ -114,13 +114,13 @@
 }
 .rc-core .ring2 { inset: 13px; animation-delay: -1.7s; opacity: .18; }
 .rc-core .orb {
-  font-size: 30px; color: var(--st, var(--rc-cyan));
+  font-size: 25px; color: var(--st, var(--rc-cyan));
   text-shadow: 0 0 18px var(--st, var(--rc-cyan)); line-height: 1;
 }
 .rc-core.beat .orb { animation: rcbeat .55s ease-out; }
 .rc-core.beat .ring { animation: rcflash .55s ease-out; }
 .rc-state { font-size: 21px; letter-spacing: .14em; font-weight: 700; color: var(--st, var(--rc-cyan)); text-align: center; }
-.rc-now { font-size: 13px; color: var(--rc-dim); text-align: center; line-height: 1.45; min-height: 2.6em; }
+.rc-now { font-size: 13px; color: var(--rc-dim); text-align: center; line-height: 1.4; }
 .rc-since { font-size: 11px; color: #4a545e; }
 
 .rc-kv { display: flex; flex-direction: column; gap: 7px; }
@@ -192,7 +192,7 @@
 
 /* ---------------------------------------------------------- verification */
 .rc-verdict {
-  font-size: 30px; font-weight: 800; letter-spacing: .14em; text-align: center;
+  font-size: 27px; font-weight: 800; letter-spacing: .14em; text-align: center;
   padding: 4px 0 2px;
 }
 .rc-verdict.pass { color: var(--rc-ok); text-shadow: 0 0 22px rgba(110,231,155,.45); }
@@ -214,6 +214,7 @@
   background: #0d1013; border: 1px solid var(--rc-line); border-radius: 4px;
   font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: #8a959f;
   white-space: pre-wrap; word-break: break-word;
+  max-height: 190px; overflow-y: auto;
 }
 .rc-ev.k-verify .tx { color: var(--rc-cyan); font-weight: 600; }
 .rc-ev.k-pass .tx { color: var(--rc-ok); }

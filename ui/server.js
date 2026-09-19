@@ -137,7 +137,11 @@ app.get('/api/projects', async (req, res) => {
   const projects = [];
   for (const p of PROJECTS) {
     try {
-      projects.push(p.type === 'git' ? await gitProject(p) : fsProject(p));
+      const entry = p.type === 'git' ? await gitProject(p) : fsProject(p);
+      // The Run Control tab only appears where there are runs to watch.
+      entry.runControl = { title: p.runControl?.title || null,
+                           has: fs.existsSync(path.join(DOCS, p.dir, p.runControl?.dir || RUNS_DIR_DEFAULT)) };
+      projects.push(entry);
     } catch (e) {
       projects.push({ name: p.name, dir: p.dir, type: p.type, deploy: p.deploy || null, docs: [], branch: null, dirty: 0, changes: [], metrics: null, error: String(e?.message || e), sources: [src(p.type === 'git' ? 'git' : 'fs', { repo: p.dir })] });
     }
@@ -159,6 +163,115 @@ app.get('/api/doc', (req, res) => {
   } catch (e) {
     res.status(404).json({ error: `could not read ${file}: ${String(e?.message || e)}` });
   }
+});
+
+// --- Run Control ----------------------------------------------------------
+// Read-only window onto a project's run folder (`.runs/` by default; set
+// `runControl.dir` per project to point somewhere else). Everything the panel
+// shows is read from those files at request time: no state here, no database,
+// no daemon. If the recorder dies mid-run the folder is still on disk and
+// still renders. A run is written by whatever tooling the project uses; Mithra
+// only reads it.
+const RUN_ID = /^[\w.\-]+$/;
+const SHOT_FILE = /^[\w.\-]+\.png$/;
+
+const RUNS_DIR_DEFAULT = '.runs';
+function runsRoot(dir) {
+  const proj = PROJECTS.find((p) => p.dir === dir);
+  if (!proj) return null;
+  return path.join(DOCS, proj.dir, proj.runControl?.dir || RUNS_DIR_DEFAULT);
+}
+function readJSON(f, fallback = null) {
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fallback; }
+}
+function listRuns(root) {
+  try {
+    return fs.readdirSync(path.join(root, 'runs'), { withFileTypes: true })
+      .filter((e) => e.isDirectory() && RUN_ID.test(e.name))
+      .map((e) => e.name)
+      .sort()
+      .reverse();
+  } catch { return []; }
+}
+function activeRun(root) {
+  try {
+    const id = fs.readFileSync(path.join(root, 'active'), 'utf8').trim();
+    return RUN_ID.test(id) && fs.existsSync(path.join(root, 'runs', id)) ? id : null;
+  } catch { return null; }
+}
+
+// Run index: enough to populate a picker, not enough to be a management UI.
+app.get('/api/runs/runs', (req, res) => {
+  const root = runsRoot(req.query.dir);
+  if (!root) return res.status(404).json({ error: 'unknown project' });
+  const active = activeRun(root);
+  const runs = listRuns(root).slice(0, 25).map((id) => {
+    const r = readJSON(path.join(root, 'runs', id, 'run.json'), {}) || {};
+    return { id, goal: r.goal || null, started: r.started || null, ended: r.ended || null,
+             status: r.status || null, events: r.events ?? null, failures: r.failures ?? null,
+             live: id === active };
+  });
+  res.json({ active, runs });
+});
+
+// One run, whole. Small by construction: events are a few KB, images are served
+// separately. `stamp` is what the client polls on — it changes only when the run does.
+app.get('/api/runs/run', (req, res) => {
+  const root = runsRoot(req.query.dir);
+  if (!root) return res.status(404).json({ error: 'unknown project' });
+  const active = activeRun(root);
+  const id = RUN_ID.test(req.query.run || '') ? req.query.run : (active || listRuns(root)[0]);
+  if (!id) return res.json({ empty: true, active: null, runs: [], stamp: 'empty' });
+  const dir = path.join(root, 'runs', id);
+  if (!fs.existsSync(dir)) return res.status(404).json({ error: 'unknown run' });
+
+  const events = [];
+  try {
+    const raw = fs.readFileSync(path.join(dir, 'events.ndjson'), 'utf8');
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try { events.push(JSON.parse(line)); } catch { /* una linea rota no tumba el run */ }
+    }
+  } catch { /* no events yet */ }
+
+  let shots = [];
+  try {
+    shots = fs.readdirSync(path.join(dir, 'shots')).filter((f) => SHOT_FILE.test(f)).sort();
+  } catch { /* no shots */ }
+  // Each shot is tied to the event that produced it: the filmstrip is the
+  // timeline in pictures, not a loose gallery.
+  const shotMeta = shots.map((file) => {
+    const ev = events.find((e) => (e.artifacts || []).some((a) => String(a).endsWith(file)));
+    return { file, t: ev?.t || null, seq: ev?.seq ?? null, label: ev?.label || file.replace(/^\d+-|\.png$/g, ''),
+             mode: /CaptureEditorImage/.test(ev?.tool || '') ? 'PIE' : 'EDITOR' };
+  });
+
+  let stamp = id;
+  for (const f of ['events.ndjson', 'run.json']) {
+    try { stamp += ':' + fs.statSync(path.join(dir, f)).mtimeMs; } catch { /* not there yet */ }
+  }
+  stamp += ':' + shots.length + ':' + (active === id ? 'live' : 'done');
+
+  res.json({
+    id, live: active === id, stamp,
+    run: readJSON(path.join(dir, 'run.json'), {}),
+    env: readJSON(path.join(dir, 'env.json'), {}),
+    mission: (() => { try { return fs.readFileSync(path.join(dir, 'mission.md'), 'utf8'); } catch { return null; } })(),
+    before: readJSON(path.join(dir, 'snapshots', 'before.json'), null),
+    after: readJSON(path.join(dir, 'snapshots', 'after.json'), null),
+    events, shots: shotMeta,
+  });
+});
+
+// Images. Name validated against a regex and resolved inside the run folder.
+app.get('/api/runs/shot', (req, res) => {
+  const root = runsRoot(req.query.dir);
+  const { run, file } = req.query;
+  if (!root || !RUN_ID.test(run || '') || !SHOT_FILE.test(file || '')) return res.status(400).end();
+  const full = path.join(root, 'runs', run, 'shots', file);
+  const rel = path.relative(root, full);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return res.status(400).end();
+  res.sendFile(full, (e) => { if (e) res.status(404).end(); });
 });
 
 // --- Vault ----------------------------------------------------------------

@@ -540,11 +540,18 @@ const TABS = [
   { id: "board",    key: "tab_board" },
   { id: "designs",  key: "tab_designs" },
   { id: "sessions", key: "tab_sessions" },
+  // Only shown for projects that have a run folder (the server sets runControl.has).
+  { id: "control",  key: "tab_control", runs: true },
 ];
 // Remembered tab, but only if it's still a real one: a stored id from an older
 // build (or a hand-edited localStorage) would otherwise render an empty view.
 const storedTab = localStorage.getItem("mithra.tab");
 let activeTab = TABS.some((t) => t.id === storedTab) ? storedTab : "summary";
+// Deep link: ?p=<dir>&tab=<id>. Opens Mithra straight on a project's tab (and
+// makes a screenshot a single URL, with no clicks).
+const _q = new URLSearchParams(location.search);
+if (_q.get("p")) current = _q.get("p");
+if (_q.get("tab") && TABS.some((t) => t.id === _q.get("tab"))) activeTab = _q.get("tab");
 
 const railList = document.getElementById("rail-list");
 const tabsEl = document.getElementById("tabs");
@@ -646,7 +653,9 @@ function selectProject(dir) {
 }
 
 function renderTabs() {
-  tabsEl.innerHTML = TABS.map((tb) =>
+  const shown = TABS.filter((tb) => !tb.runs || proj()?.runControl?.has);
+  if (!shown.some((tb) => tb.id === activeTab)) activeTab = "summary";
+  tabsEl.innerHTML = shown.map((tb) =>
     `<button class="tab ${tb.id === activeTab ? "active" : ""}" data-tab="${tb.id}">${esc(t(tb.key))}</button>`
   ).join("");
   tabsEl.querySelectorAll(".tab").forEach((el) => {
@@ -658,7 +667,13 @@ function proj() { return DATA?.projects.find((p) => p.dir === current); }
 
 function renderView() {
   const p = proj();
+  // Run Control takes over the panel (no padding) and runs its own poll; leaving
+  // the tab has to stop it or it keeps fetching in the background.
+  const isRuns = activeTab === "control";
+  viewEl.classList.toggle("rc-host", isRuns);
+  if (!isRuns) window.stopRunControl?.();
   if (!p) { viewEl.innerHTML = `<div class="v-empty">${esc(t("pick_project_short"))}</div>`; return; }
+  if (isRuns) return window.renderRunControl?.(viewEl, p);
   if (activeTab === "summary")  return renderSummary(p);
   if (activeTab === "tasks")   return renderTasks(p);
   if (activeTab === "board")  return renderBoard(p);

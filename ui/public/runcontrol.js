@@ -414,7 +414,9 @@
     stop();
     hostDir = project.dir;
     hostTitle = project.runControl?.title || tr('rc_title');
-    lastStamp = null; lastSeq = 0; pickedShot = null; pickedRun = null; followLatest = true;
+    lastStamp = null; lastSeq = 0; pickedShot = null; followLatest = true;
+    // ?run=<id> pins a specific historical run, so a single URL addresses one.
+    pickedRun = new URLSearchParams(location.search).get('run') || null;
     viewEl.innerHTML = '<div class="rc" id="rc-root"></div>';
     const host = viewEl.querySelector('#rc-root');
     poll(host);

@@ -1,0 +1,2 @@
+# git hooks run under sh: keep them LF on every checkout, even with autocrlf
+.githooks/* text eol=lf

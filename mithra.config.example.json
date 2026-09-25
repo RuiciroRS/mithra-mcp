@@ -18,6 +18,9 @@
   "//claudeBin": "GUI only. 'auto' looks up claude on PATH; or give an absolute path.",
   "claudeBin": "auto",
 
+  "//feed": "Activity feed. hooks/feed.mjs (registered as a Claude Code hook) appends one line per tool call start/end to `file`; rotated to file.1 past maxBytes. `raw: true` also dumps the hook payloads to file.raw, for debugging only.",
+  "feed": { "file": "~/.mithra/feed.jsonl", "maxBytes": 5000000 },
+
   "//skills": "GUI only. The chips above the terminal. Each one types its cmd into the prompt.",
   "skills": [
     { "label": "Code Review",   "cmd": "/code-review " },

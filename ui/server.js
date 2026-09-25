@@ -139,7 +139,10 @@ app.get('/api/projects', async (req, res) => {
     try {
       const entry = p.type === 'git' ? await gitProject(p) : fsProject(p);
       // The Run Control tab only appears where there are runs to watch.
+      // hostKey: which key of a run's env.json describes the host the agent drives
+      // (default "host"); the project's own tooling decides that name, not Mithra.
       entry.runControl = { title: p.runControl?.title || null,
+                           hostKey: p.runControl?.hostKey || 'host',
                            has: fs.existsSync(path.join(DOCS, p.dir, p.runControl?.dir || RUNS_DIR_DEFAULT)) };
       projects.push(entry);
     } catch (e) {
@@ -653,8 +656,22 @@ const feedClients = new Set();
 const feedRing = [];
 let feedOffset = 0, feedTail = '', feedExists = false;
 
+// Lanes are assigned here, not in the hook: edit them in the config and even the
+// rows already in the file are re-classified on the next start.
+const FEED_LANES = cfg.feedLanes.map((l) => ({
+  tools: l.tools.map((t) => new RegExp('^' + t.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$')),
+  match: l.match ? new RegExp(l.match, 'i') : null,
+}));
+
+function laneOf(e) {
+  const i = FEED_LANES.findIndex((l) =>
+    l.tools.some((re) => re.test(e.tool || '')) && (!l.match || l.match.test(e.summary || '')));
+  return i < 0 ? null : i;
+}
+
 function feedPush(items) {
   if (!items.length) return;
+  for (const e of items) e.lane = laneOf(e);
   feedRing.push(...items);
   if (feedRing.length > FEED_KEEP) feedRing.splice(0, feedRing.length - FEED_KEEP);
   const msg = JSON.stringify({ t: 'feed', items });

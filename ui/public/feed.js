@@ -11,6 +11,10 @@
   const STALE_MS = 10 * 60 * 1000;
   const MAX_ROWS = 200;
   const STORE_KEY = 'mithra.feed.open';
+  const STREAM_KEY = 'mithra.feed.stream';
+  // One glyph per lane slot, so lanes stay apart where colour doesn't (the mono theme, a
+  // colour-blind viewer, a compressed video).
+  const GLYPHS = { 1: '◆', 2: '▲', 3: '■', 4: '●' };
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   // t() and CONFIG come from app.js; init() runs after its config has loaded.
@@ -36,6 +40,10 @@
   const order = [];          // keys, newest first
   let paused = false, hoverPause = false, queued = [];
   let ws = null, retry = 0, status = 'connecting', inited = false;
+  let lanes = [], stream = false, streamBtn, legendEl;
+
+  // A lane label is "Name" or { en, es }.
+  const laneLabel = (l) => (l && typeof l.label === 'object' ? (l.label[CONFIG.lang] || l.label.en || Object.values(l.label)[0]) : l?.label) || '';
 
   const keyOf = (e) => e.id || `${e.ts}|${e.tool}|${e.session}`;
 
@@ -67,13 +75,18 @@
     const who = e.agent || tr('feed_main');
     const detail = handback ? tr('feed_handback') : e.summary;
     const err = c.end?.error ? `<div class="fd-err">${esc(c.end.error)}</div>` : '';
-    c.el.className = `fd-row st-${st}`;
+    const laneIdx = c.start?.lane ?? c.end?.lane ?? null;
+    const lane = laneIdx != null ? lanes[laneIdx] : null;
+    // Rows outside every lane are dimmed; the main agent's are also what stream mode hides.
+    const laneCls = lane ? `lane lane-${lane.slot}` : (e.agent ? 'nolane' : 'nolane main-nolane');
+    const glyph = lane ? `<span class="fd-glyph" title="${esc(laneLabel(lane))}">${GLYPHS[lane.slot]}</span>` : '';
+    c.el.className = `fd-row st-${st} ${laneCls}`;
     c.el.title = [e.summary, c.end?.error].filter(Boolean).join('\n\n');
     c.el.innerHTML =
       `<div class="fd-head"><span class="fd-time">${hms(e.ts)}</span>` +
       `<span class="fd-who">${esc(who)}</span>` +
       `<span class="fd-st"${st === 'stale' ? ` title="${esc(tr('feed_stale_t'))}"` : ''}>${esc(statusText(c, st))}</span></div>` +
-      `<div class="fd-tool">${esc(handback ? '↩' : toolLabel(e.tool))}</div>` +
+      `<div class="fd-tool">${glyph}${esc(handback ? '↩' : toolLabel(e.tool))}</div>` +
       `<div class="fd-sum">${esc(detail)}</div>` + err;
   }
 
@@ -155,6 +168,19 @@
     };
   }
 
+  function setStream(on) {
+    stream = on;
+    root.classList.toggle('stream', on);
+    streamBtn.classList.toggle('on', on);
+    streamBtn.title = tr(on ? 'feed_stream_off_t' : 'feed_stream_on_t');
+    try { localStorage.setItem(STREAM_KEY, on ? '1' : '0'); } catch {}
+  }
+
+  function renderLegend() {
+    legendEl.innerHTML = lanes.map((l) =>
+      `<span class="fd-leg lane-${l.slot}"><span class="fd-glyph">${GLYPHS[l.slot]}</span>${esc(laneLabel(l))}</span>`).join('');
+  }
+
   function setOpen(open) {
     root.classList.toggle('collapsed', !open);
     try { localStorage.setItem(STORE_KEY, open ? '1' : '0'); } catch {}
@@ -167,12 +193,19 @@
     root.innerHTML =
       `<div class="fd-bar"><span class="fd-title">${esc(tr('feed_title'))}</span>` +
       `<span class="fd-state"></span><span class="fd-new"></span>` +
+      `<button class="fd-stream" type="button">${esc(tr('feed_stream'))}</button>` +
       `<button class="fd-pause" type="button">⏸</button></div>` +
+      `<div class="fd-legend"></div>` +
       `<div class="fd-list"></div>`;
     listEl = root.querySelector('.fd-list');
     stateEl = root.querySelector('.fd-state');
     pauseBtn = root.querySelector('.fd-pause');
     newEl = root.querySelector('.fd-new');
+    streamBtn = root.querySelector('.fd-stream');
+    legendEl = root.querySelector('.fd-legend');
+    lanes = Array.isArray(CONFIG.feedLanes) ? CONFIG.feedLanes : [];
+    renderLegend();
+    streamBtn.onclick = () => setStream(!stream);
     pauseBtn.onclick = () => setPaused(!paused);
     newEl.onclick = () => setPaused(false);
     // Hovering the list holds new rows back, so the one being read doesn't slide away.
@@ -184,6 +217,9 @@
     let open = false;
     try { open = localStorage.getItem(STORE_KEY) === '1'; } catch {}
     setOpen(open);
+    let streamOn = false;
+    try { streamOn = localStorage.getItem(STREAM_KEY) === '1'; } catch {}
+    setStream(streamOn);
     const btn = document.getElementById('feed-toggle');
     if (btn) btn.onclick = () => setOpen(root.classList.contains('collapsed'));
 

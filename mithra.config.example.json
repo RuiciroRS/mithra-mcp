@@ -19,7 +19,16 @@
   "claudeBin": "auto",
 
   "//feed": "Activity feed. hooks/feed.mjs (registered as a Claude Code hook) appends one line per tool call start/end to `file`; rotated to file.1 past maxBytes. `raw: true` also dumps the hook payloads to file.raw, for debugging only.",
-  "feed": { "file": "~/.mithra/feed.jsonl", "maxBytes": 5000000 },
+  "//feedLanes": "Rows to colour in the feed panel. tool = name or list, * as wildcard; match = optional regex on the row's summary; slot 1-4 = colour and glyph from the theme. First match wins; everything else is dimmed. label can be a string or { en, es }.",
+  "feed": {
+    "file": "~/.mithra/feed.jsonl",
+    "maxBytes": 5000000,
+    "lanes": [
+      { "label": "GitHub", "tool": "mcp__github__*", "slot": 1 },
+      { "label": "Docker", "tool": ["Bash", "PowerShell"], "match": "\\bdocker\\b", "slot": 2 },
+      { "label": { "en": "Subagents", "es": "Subagentes" }, "tool": ["Agent", "Task", "SubagentHandback"], "slot": 3 }
+    ]
+  },
 
   "//skills": "GUI only. The chips above the terminal. Each one types its cmd into the prompt.",
   "skills": [

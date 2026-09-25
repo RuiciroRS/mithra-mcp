@@ -48,8 +48,34 @@ const DEFAULTS = {
   skills: DEFAULT_SKILLS,
   // Activity feed written by hooks/feed.mjs. `~` expands to the home folder;
   // relative paths resolve against the config file's folder, as the hook does.
-  feed: { file: '~/.mithra/feed.jsonl', maxBytes: 5_000_000 },
+  // `lanes` colour the rows you care about; see normalizeLanes.
+  feed: { file: '~/.mithra/feed.jsonl', maxBytes: 5_000_000, lanes: [] },
 };
+
+// Feed lanes. Each one: { label, tool, match?, slot }.
+//   label  "Name" or { en, es } — shown in the panel legend.
+//   tool   tool name, or array of them; `*` is a wildcard ("mcp__github__*").
+//   match  optional regex (case-insensitive) that the row's summary must contain.
+//   slot   1-4, the colour and glyph from the theme (--lane-1..4, ◆ ▲ ■ ●).
+// First matching lane wins. Invalid entries are dropped with a warning.
+function normalizeLanes(lanes) {
+  if (!Array.isArray(lanes)) return [];
+  const out = [];
+  for (const [i, l] of lanes.entries()) {
+    const tools = [].concat(l?.tool || []).map(String).filter(Boolean);
+    const slot = Number(l?.slot);
+    if (!tools.length || !(slot >= 1 && slot <= 4)) {
+      console.error(`[mithra] feed.lanes[${i}] needs a tool and a slot 1-4 — skipped.`);
+      continue;
+    }
+    if (l.match) {
+      try { new RegExp(l.match, 'i'); }
+      catch (e) { console.error(`[mithra] feed.lanes[${i}].match is not a valid regex (${e.message}) — skipped.`); continue; }
+    }
+    out.push({ label: l.label ?? tools[0], tools, match: l.match || null, slot });
+  }
+  return out;
+}
 
 function expandHome(p) {
   return p === '~' || p.startsWith('~/') || p.startsWith('~\\') ? path.join(os.homedir(), p.slice(1)) : p;
@@ -161,6 +187,7 @@ export function loadConfig() {
   cfg.feedFile = feed?.file
     ? resolveFrom(path.dirname(cfgPath), expandHome(process.env.MITHRA_FEED || feed.file))
     : null;
+  cfg.feedLanes = feed ? normalizeLanes(feed.lanes) : [];
 
   cfg.source = source;
   cfg.__dirname = __dirname;
@@ -180,5 +207,6 @@ export function publicConfig(cfg) {
     projectsMode: cfg.projectsMode,
     claudeReady: !!cfg.claudeBin,
     hasFeed: !!cfg.feedFile,
+    feedLanes: cfg.feedLanes.map((l) => ({ label: l.label, slot: l.slot })), // no rules, just what the legend shows
   };
 }

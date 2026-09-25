@@ -15,7 +15,7 @@
   const POLL_MS = 1200;
   let timer = null, tickTimer = null;
   let lastStamp = null, pickedShot = null, pickedRun = null, followLatest = true;
-  let lastSeq = 0, hostDir = null, hostTitle = 'RUN CONTROL';
+  let lastSeq = 0, hostDir = null, hostTitle = 'RUN CONTROL', hostKey = 'host';
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const hhmm = (t) => { try { return new Date(t).toLocaleTimeString([], { hour12: false }); } catch { return '--:--:--'; } };
@@ -148,7 +148,7 @@
 
   // -------------------------------------------------------------- rendering
   function chips(d) {
-    const env = d.env || {}, host = env.unreal || env.host || {}, git = (d.before && d.before.git) || env.git || {};
+    const env = d.env || {}, host = env[hostKey] || env.host || {}, git = (d.before && d.before.git) || env.git || {};
     // Live runtime flag comes from the events, not from env.json (that is a snapshot of the start).
     let pie = host.pie;
     for (const e of d.events || []) {
@@ -388,7 +388,13 @@
     const el = host.querySelector('#rc-since');
     if (!el || !host._since) return;
     const s = Math.max(0, Math.round((Date.now() - new Date(host._since).getTime()) / 1000));
-    el.textContent = s < 2 ? tr('rc_now') : tr(s < 90 ? 'rc_ago_s' : 'rc_ago_min', { n: s < 90 ? s : Math.round(s / 60) });
+    // Seconds, then minutes, hours, days: an old run read "9618 min ago" before.
+    el.textContent =
+      s < 2 ? tr('rc_now') :
+      s < 90 ? tr('rc_ago_s', { n: s }) :
+      s < 90 * 60 ? tr('rc_ago_min', { n: Math.round(s / 60) }) :
+      s < 36 * 3600 ? tr('rc_ago_h', { n: Math.round(s / 3600) }) :
+      tr('rc_ago_d', { n: Math.round(s / 86400) });
   }
 
   async function poll(host) {
@@ -417,6 +423,7 @@
     stop();
     hostDir = project.dir;
     hostTitle = project.runControl?.title || tr('rc_title');
+    hostKey = project.runControl?.hostKey || 'host';
     lastStamp = null; lastSeq = 0; pickedShot = null; followLatest = true;
     // ?run=<id> pins a specific historical run, so a single URL addresses one.
     pickedRun = new URLSearchParams(location.search).get('run') || null;

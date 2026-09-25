@@ -252,6 +252,27 @@ What is in the window:
 - **Paste or drop an image** anywhere in the window. A terminal only carries text, so the
   image is written to a temp file and its path typed into the prompt — the CLI reads it
   from disk. Screenshots stop being a reason to leave the window.
+- **Activity feed** — a side panel (`◉ feed`) with one row per tool call from every Claude
+  Code session on the machine, subagents included: who ran it, the tool, a one-line summary,
+  and its state — running, done with its duration, failed with the error, or `? no end` when a
+  start never got an end after 10 minutes.
+
+The feed comes from a hook, [`hooks/feed.mjs`](hooks/feed.mjs). Register it in
+`~/.claude/settings.json` for three events — a tool that fails fires `PostToolUseFailure`,
+never `PostToolUse`, so without the third one a failed call looks like it is still running:
+
+```json
+"hooks": {
+  "PreToolUse":         [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node /path/to/mithra-mcp/hooks/feed.mjs", "timeout": 5 }] }],
+  "PostToolUse":        [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node /path/to/mithra-mcp/hooks/feed.mjs", "timeout": 5 }] }],
+  "PostToolUseFailure": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node /path/to/mithra-mcp/hooks/feed.mjs", "timeout": 5 }] }]
+}
+```
+
+It appends JSON lines to `feed.file` (default `~/.mithra/feed.jsonl`), redacts things that look
+like credentials, never stores tool output, and always exits 0 without printing, so it cannot
+block or break a session. The GUI follows that file and pushes new lines over the same
+WebSocket server as the terminal, on `/feed`.
 
 Want to see it without configuring anything? `npm run demo:ui` opens the same window over the
 throwaway demo workspace, on its own port, so nothing of yours is on screen.
@@ -325,6 +346,13 @@ npm run test:protocol   # boots the server and drives it through a real MCP clie
 All three are workspace-agnostic: they pick their targets from config, so a fork runs them
 without editing a line. `MITHRA_CONFIG=/path/to/other.json` points any of them at an alternate
 workspace — that's how the demo runs without touching yours.
+
+**A pre-push hook runs them for you.** `npm run hooks:install` points git at
+[`.githooks/`](.githooks/); from then on every `git push` runs `smoke` and `test:protocol` and
+scans what is about to be pushed — the files at the pushed commit and the new commit messages —
+for names listed in `.private-names`, one per line. Any failure blocks the push. That file is
+gitignored: a list of what must stay private can't live in a public repo. Without it the scan is
+skipped with a warning.
 
 ## Where this is going
 

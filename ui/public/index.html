@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/themes.css" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/runcontrol.css" />
+  <link rel="stylesheet" href="/feed.css" />
 </head>
 <body>
   <div id="app">
@@ -21,6 +22,7 @@
       <button id="standup-btn" class="bar-btn" data-i18n-title="bar_standup" data-i18n="btn_today" title="today's standup">◴ today</button>
       <button id="wm-btn" class="bar-btn" data-i18n-title="bar_memory" data-i18n="btn_memory" title="WORKING_MEMORY">☉ memory</button>
       <button id="term-toggle" class="bar-btn term-toggle" data-i18n-title="bar_terminal" data-i18n="btn_terminal" title="terminal (Ctrl+;)">⌨ terminal</button>
+      <button id="feed-toggle" class="bar-btn" data-i18n-title="bar_feed" data-i18n="btn_feed" title="agent activity feed">◉ feed</button>
       <div class="status" id="status" data-i18n-title="bar_conn" title="terminal connection">●</div>
     </header>
 
@@ -36,6 +38,9 @@
         <div id="tabs"></div>
         <div id="view"><div class="v-empty" data-i18n="pick_project">Pick a project on the left.</div></div>
       </main>
+
+      <!-- Activity feed (filled by feed.js) -->
+      <aside id="feed" class="collapsed"></aside>
     </div>
 
     <!-- Terminal drawer (collapsible) -->
@@ -96,6 +101,7 @@
   <script src="/vendor/fit/lib/addon-fit.js"></script>
   <script src="/i18n.js"></script>
   <script src="/runcontrol.js"></script>
+  <script src="/feed.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

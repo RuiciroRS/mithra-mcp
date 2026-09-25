@@ -20,7 +20,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_FILE = '~/.mithra/feed.jsonl';
 const DEFAULT_MAX_BYTES = 5_000_000;
 const SUMMARY_MAX = 160;
-const PENDING_TTL_MS = 60 * 60 * 1000; // a start with no end after an hour is dropped
+// A start with no end after this long is treated as abandoned: its marker is
+// dropped, and the GUI shows the row as "no end" instead of running.
+const STALE_MS = 10 * 60 * 1000;
 
 const PHASE = { PreToolUse: 'start', PostToolUse: 'end', PostToolUseFailure: 'end' };
 
@@ -103,14 +105,16 @@ function takeStart(file, id) {
   } catch { return null; }
 }
 
-function sweepPending(dir, now) {
+// `force` sweeps regardless of count; used on rotation, when the starts those
+// markers belong to have just moved to the old file.
+function sweepPending(dir, now, force = false) {
   let names;
   try { names = fs.readdirSync(dir); } catch { return; }
-  if (names.length < 50) return;
+  if (!force && names.length < 50) return;
   for (const n of names) {
     try {
       const p = path.join(dir, n);
-      if (now - fs.statSync(p).mtimeMs > PENDING_TTL_MS) fs.unlinkSync(p);
+      if (now - fs.statSync(p).mtimeMs > STALE_MS) fs.unlinkSync(p);
     } catch {}
   }
 }
@@ -119,7 +123,10 @@ function sweepPending(dir, now) {
 // appends or renames; nothing here opens an existing file for truncation.
 function rotate(file, maxBytes) {
   try {
-    if (fs.statSync(file).size > maxBytes) fs.renameSync(file, file + '.1');
+    if (fs.statSync(file).size > maxBytes) {
+      fs.renameSync(file, file + '.1');
+      sweepPending(pendingDir(file), Date.now(), true);
+    }
   } catch {}
 }
 

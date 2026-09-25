@@ -6,4 +6,6 @@ Thumbs.db
 
 # your workspace map — yours alone, never committed
 mithra.config.json
+# names the pre-push hook refuses to publish — the list itself is private
+.private-names
 _cfg.bak

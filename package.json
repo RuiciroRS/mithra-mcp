@@ -14,7 +14,8 @@
     "demo": "node demo/run-demo.mjs",
     "demo:ui": "node demo/run-demo-ui.mjs",
     "smoke": "node test-smoke.mjs",
-    "test:protocol": "node test-protocol.mjs"
+    "test:protocol": "node test-protocol.mjs",
+    "hooks:install": "git config core.hooksPath .githooks"
   },
   "keywords": [
     "mcp",

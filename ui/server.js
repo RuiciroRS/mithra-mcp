@@ -642,10 +642,94 @@ app.post(
   }
 );
 
+// ------------------------------------------------------------ activity feed --
+// hooks/feed.mjs appends one JSON line per tool call start/end to cfg.feedFile.
+// The server follows that file and pushes new lines to every WebSocket opened
+// on /feed. It keeps the last FEED_KEEP events so a panel that opens late still
+// has something to show. Read-only: the server never writes to the file.
+const FEED_KEEP = 300;
+const FEED_BACKFILL_BYTES = 256 * 1024;
+const feedClients = new Set();
+const feedRing = [];
+let feedOffset = 0, feedTail = '', feedExists = false;
+
+function feedPush(items) {
+  if (!items.length) return;
+  feedRing.push(...items);
+  if (feedRing.length > FEED_KEEP) feedRing.splice(0, feedRing.length - FEED_KEEP);
+  const msg = JSON.stringify({ t: 'feed', items });
+  for (const ws of feedClients) { try { ws.send(msg); } catch {} }
+}
+
+function feedStatus() {
+  const msg = JSON.stringify({ t: 'feed-status', exists: feedExists });
+  for (const ws of feedClients) { try { ws.send(msg); } catch {} }
+}
+
+function feedParse(chunk) {
+  const text = feedTail + chunk;
+  const lines = text.split('\n');
+  feedTail = lines.pop(); // a half-written last line waits for the next read
+  const out = [];
+  for (const l of lines) {
+    if (!l.trim()) continue;
+    try { out.push(JSON.parse(l)); } catch {}
+  }
+  return out;
+}
+
+function feedRead(fromStart) {
+  let st;
+  try { st = fs.statSync(cfg.feedFile); }
+  catch {
+    if (feedExists) { feedExists = false; feedStatus(); }
+    feedOffset = 0; feedTail = '';
+    return;
+  }
+  if (!feedExists) { feedExists = true; feedStatus(); }
+  // Smaller than what we already read: the hook rotated it. Start the new file over.
+  if (st.size < feedOffset) { feedOffset = 0; feedTail = ''; }
+  if (fromStart) feedOffset = Math.max(0, st.size - FEED_BACKFILL_BYTES);
+  if (st.size === feedOffset) return;
+  const len = st.size - feedOffset;
+  const buf = Buffer.alloc(len);
+  let fd;
+  try {
+    fd = fs.openSync(cfg.feedFile, 'r');
+    fs.readSync(fd, buf, 0, len, feedOffset);
+  } catch { return; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
+  let chunk = buf.toString('utf8');
+  // Backfill starts mid-file: drop the partial first line.
+  if (fromStart && feedOffset > 0) chunk = chunk.slice(chunk.indexOf('\n') + 1);
+  feedOffset = st.size;
+  feedPush(feedParse(chunk));
+}
+
+if (cfg.feedFile) {
+  feedRead(true);
+  // watchFile polls; fs.watch on Windows misses appends from other processes.
+  fs.watchFile(cfg.feedFile, { interval: 500 }, () => feedRead(false));
+}
+
+function attachFeed(ws) {
+  feedClients.add(ws);
+  try {
+    ws.send(JSON.stringify({ t: 'feed-status', exists: feedExists, enabled: !!cfg.feedFile }));
+    ws.send(JSON.stringify({ t: 'feed-backlog', items: feedRing }));
+  } catch {}
+  ws.on('close', () => feedClients.delete(ws));
+}
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws, req) => {
+  // Same WebSocket server, two kinds of connection. /feed only listens to the
+  // activity feed; everything else is a terminal and gets its own claude process.
+  let pathname = '/';
+  try { pathname = new URL(req.url, 'http://localhost').pathname; } catch {}
+  if (pathname === '/feed') { attachFeed(ws); return; }
+
   // The terminal is anchored to the project folder if the front end sends ?dir=...
   // (whitelisted by PROJECTS); otherwise it falls back to the root. That way you land
   // in the CLAUDE.md of the right repo instead of always at the root.
@@ -687,5 +771,6 @@ server.listen(PORT, HOST, () => {
   console.log(`☉ ${cfg.appName} UI on http://${HOST}:${PORT}`);
   console.log(`  config: ${cfg.source} · root: ${cfg.root}`);
   console.log(`  projects: ${PROJECTS.length} (${cfg.projectsMode}) · vault: ${VAULT ? 'yes' : 'no'} · claude: ${CLAUDE ? 'ok' : 'NOT FOUND'}`);
+  console.log(`  feed: ${cfg.feedFile ? (feedExists ? `${feedRing.length} recent event(s)` : 'waiting for the file') : 'off'}`);
   if (!CLAUDE) console.log('  ⚠️  claude is not on the PATH — the terminal will not start until "claudeBin" is configured.');
 });

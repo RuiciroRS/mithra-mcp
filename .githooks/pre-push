@@ -1,0 +1,81 @@
+#!/bin/sh
+# pre-push — runs before anything leaves this machine. Any failure blocks the push.
+#
+#   1. npm run smoke          (the workspace parses end to end)
+#   2. npm run test:protocol  (the MCP server answers a real handshake)
+#   3. a scan for private names in what is being pushed: the files at the pushed
+#      commit and the messages of the commits that are new to the remote.
+#
+# The names come from .private-names at the repo root: one per line, matched as
+# whole words, case-insensitive; blank lines and lines starting with # are skipped.
+# That file is gitignored on purpose — the list of what must not be published
+# cannot itself be published. Without it the scan is skipped with a warning.
+#
+# Enable once per clone:  npm run hooks:install   (sets core.hooksPath=.githooks)
+# Skip in an emergency:   git push --no-verify
+
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+zero=0000000000000000000000000000000000000000
+list="$root/.private-names"
+pats=$(mktemp)
+trap 'rm -f "$pats"' EXIT
+fail=0
+
+say() { printf '%s\n' "pre-push: $*" >&2; }
+
+if [ -f "$list" ]; then
+  tr -d '\r' < "$list" | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$' > "$pats"
+else
+  say "WARNING: no .private-names file, private-name scan skipped"
+fi
+
+# --- 3. private names, per pushed ref (stdin: <local ref> <local sha> <remote ref> <remote sha>)
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue          # deleting a remote branch: nothing to scan
+  [ -s "$pats" ] || continue
+
+  hits=$(git grep -n -I -i -w -F -f "$pats" "$local_sha" -- . 2>/dev/null)
+  if [ -n "$hits" ]; then
+    say "private names in files at ${local_ref#refs/heads/} ($(git rev-parse --short "$local_sha")):"
+    printf '%s\n' "$hits" | sed "s/^$local_sha://" | head -20 >&2
+    fail=1
+  fi
+
+  if [ "$remote_sha" = "$zero" ]; then
+    range=$(git rev-list "$local_sha" --not --remotes)
+  else
+    range=$(git rev-list "$remote_sha..$local_sha")
+  fi
+  for c in $range; do
+    if git log -1 --format='%s%n%b' "$c" | grep -q -i -w -F -f "$pats"; then
+      say "private name in the message of commit $(git rev-parse --short "$c"): $(git log -1 --format=%s "$c")"
+      fail=1
+    fi
+  done
+done
+
+# --- 1 and 2. tests. They run against the working tree, so say when it differs
+# from what is being pushed.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  say "note: uncommitted changes present; the tests below run on the working tree"
+fi
+
+for script in smoke test:protocol; do
+  out=$(npm run --silent "$script" 2>&1)
+  if [ $? -ne 0 ]; then
+    say "npm run $script FAILED:"
+    printf '%s\n' "$out" | tail -15 >&2
+    fail=1
+  else
+    say "npm run $script ok"
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  say "push blocked."
+  exit 1
+fi
+say "all checks passed."
+exit 0

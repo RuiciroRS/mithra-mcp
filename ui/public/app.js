@@ -1027,4 +1027,5 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) sile
 initConfig().then(() => {
   makeTerminal(null); // initial terminal anchored to the root
   loadProjects();
+  window.MithraFeed?.init();
 });

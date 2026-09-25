@@ -46,7 +46,14 @@ const DEFAULTS = {
   workingMemoryFile: 'WORKING_MEMORY.md',
   workingMemoryCap: 2000,
   skills: DEFAULT_SKILLS,
+  // Activity feed written by hooks/feed.mjs. `~` expands to the home folder;
+  // relative paths resolve against the config file's folder, as the hook does.
+  feed: { file: '~/.mithra/feed.jsonl', maxBytes: 5_000_000 },
 };
+
+function expandHome(p) {
+  return p === '~' || p.startsWith('~/') || p.startsWith('~\\') ? path.join(os.homedir(), p.slice(1)) : p;
+}
 
 // Resolve a path that may be absolute or relative to `base`.
 function resolveFrom(base, p) {
@@ -149,6 +156,12 @@ export function loadConfig() {
   cfg.port = Number(process.env.MITHRA_PORT) || cfg.port;
   cfg.claudeBin = (cfg.claudeBin === 'auto' || !cfg.claudeBin) ? detectClaude() : cfg.claudeBin;
 
+  // GUI only: the activity feed file. `feed: null` in the config turns the panel off.
+  const feed = user.feed === null ? null : { ...DEFAULTS.feed, ...(user.feed || {}) };
+  cfg.feedFile = feed?.file
+    ? resolveFrom(path.dirname(cfgPath), expandHome(process.env.MITHRA_FEED || feed.file))
+    : null;
+
   cfg.source = source;
   cfg.__dirname = __dirname;
   return cfg;
@@ -166,5 +179,6 @@ export function publicConfig(cfg) {
     tasksFile: cfg.tasksFile,
     projectsMode: cfg.projectsMode,
     claudeReady: !!cfg.claudeBin,
+    hasFeed: !!cfg.feedFile,
   };
 }

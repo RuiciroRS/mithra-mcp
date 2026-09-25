@@ -1,0 +1,63 @@
+/* Activity feed — side panel. Uses the theme variables only; per-tool colours
+   ("lanes") come later and will be theme variables too. */
+
+#feed {
+  width: 310px; flex-shrink: 0;
+  border-left: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.18);
+  display: flex; flex-direction: column; min-height: 0;
+}
+#feed.collapsed { display: none; }
+
+.fd-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 12px 8px; border-bottom: 1px solid var(--line-soft);
+}
+.fd-title { font-size: 11px; letter-spacing: 1.5px; color: var(--gold); }
+.fd-state { font-size: 11px; color: var(--amber); opacity: .7; white-space: nowrap; }
+.fd-state.s-live { color: var(--gold); opacity: 1; }
+.fd-state.s-down { color: #ff5c7a; opacity: 1; }
+.fd-new { margin-left: auto; font-size: 11px; color: var(--gold); cursor: pointer; }
+.fd-new:empty { display: none; }
+.fd-pause {
+  margin-left: auto; font: inherit; font-size: 11px; color: var(--gold);
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  padding: 1px 7px; cursor: pointer;
+}
+.fd-new:not(:empty) + .fd-pause { margin-left: 0; }
+
+.fd-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 8px 12px; }
+.fd-empty { padding: 14px 6px; font-size: 12px; color: var(--amber); opacity: .5; line-height: 1.5; }
+
+.fd-row {
+  padding: 6px 8px; margin-bottom: 3px; border-radius: 6px;
+  border-left: 2px solid var(--line);
+  font-size: 12px; line-height: 1.35;
+}
+.fd-row:hover { background: var(--line-soft); }
+.fd-head { display: flex; gap: 8px; align-items: baseline; }
+.fd-time { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; color: var(--amber); opacity: .55; }
+.fd-who { color: var(--gold); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-st { margin-left: auto; font-size: 11px; color: var(--amber); opacity: .7; white-space: nowrap; }
+.fd-tool { color: var(--amber); opacity: .9; }
+.fd-sum {
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px;
+  color: var(--amber); opacity: .6;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fd-err {
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px;
+  color: #ff5c7a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* States. Shape and text carry the meaning; colour only reinforces it. */
+.fd-row.st-running { border-left-color: var(--gold); background: var(--glow2); }
+.fd-row.st-running .fd-st { color: var(--gold); opacity: 1; animation: fd-pulse 1.4s ease-in-out infinite; }
+.fd-row.st-stale { border-left-style: dashed; }
+.fd-row.st-stale .fd-st { opacity: .9; }
+.fd-row.st-failed { border-left-color: #ff5c7a; }
+.fd-row.st-failed .fd-st { color: #ff5c7a; opacity: 1; }
+.fd-row.st-interrupted .fd-st { opacity: .9; }
+
+@keyframes fd-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .fd-row.st-running .fd-st { animation: none; } }

@@ -540,11 +540,18 @@ const TABS = [
   { id: "board",    key: "tab_board" },
   { id: "designs",  key: "tab_designs" },
   { id: "sessions", key: "tab_sessions" },
+  // Only shown for projects that have a run folder (the server sets runControl.has).
+  { id: "control",  key: "tab_control", runs: true },
 ];
 // Remembered tab, but only if it's still a real one: a stored id from an older
 // build (or a hand-edited localStorage) would otherwise render an empty view.
 const storedTab = localStorage.getItem("mithra.tab");
 let activeTab = TABS.some((t) => t.id === storedTab) ? storedTab : "summary";
+// Deep link: ?p=<dir>&tab=<id>. Opens Mithra straight on a project's tab (and
+// makes a screenshot a single URL, with no clicks).
+const _q = new URLSearchParams(location.search);
+if (_q.get("p")) current = _q.get("p");
+if (_q.get("tab") && TABS.some((t) => t.id === _q.get("tab"))) activeTab = _q.get("tab");
 
 const railList = document.getElementById("rail-list");
 const tabsEl = document.getElementById("tabs");
@@ -646,7 +653,9 @@ function selectProject(dir) {
 }
 
 function renderTabs() {
-  tabsEl.innerHTML = TABS.map((tb) =>
+  const shown = TABS.filter((tb) => !tb.runs || proj()?.runControl?.has);
+  if (!shown.some((tb) => tb.id === activeTab)) activeTab = "summary";
+  tabsEl.innerHTML = shown.map((tb) =>
     `<button class="tab ${tb.id === activeTab ? "active" : ""}" data-tab="${tb.id}">${esc(t(tb.key))}</button>`
   ).join("");
   tabsEl.querySelectorAll(".tab").forEach((el) => {
@@ -658,7 +667,13 @@ function proj() { return DATA?.projects.find((p) => p.dir === current); }
 
 function renderView() {
   const p = proj();
+  // Run Control takes over the panel (no padding) and runs its own poll; leaving
+  // the tab has to stop it or it keeps fetching in the background.
+  const isRuns = activeTab === "control";
+  viewEl.classList.toggle("rc-host", isRuns);
+  if (!isRuns) window.stopRunControl?.();
   if (!p) { viewEl.innerHTML = `<div class="v-empty">${esc(t("pick_project_short"))}</div>`; return; }
+  if (isRuns) return window.renderRunControl?.(viewEl, p);
   if (activeTab === "summary")  return renderSummary(p);
   if (activeTab === "tasks")   return renderTasks(p);
   if (activeTab === "board")  return renderBoard(p);
@@ -680,11 +695,22 @@ async function postJSON(url, body, method = "POST") {
   return d;
 }
 
+// Provenance line: where a view's data was actually read from. Same `sources`
+// contract the MCP tools return — repo/file, plus the declared config filter
+// that assigned shared content (TASKS.md, the vault) to this project.
+function citeOf(sources) {
+  if (!Array.isArray(sources) || !sources.length) return "";
+  return sources.map((s) => {
+    const where = `${s.repo ? `${s.repo}/` : ""}${s.file || s.via}`;
+    return s.match?.length ? `${where} ← ${s.match.join(", ")}` : where;
+  }).join("  +  ");
+}
+
 // ----------------------------------------------------------------- Board -----
 async function renderBoard(p) {
   viewEl.innerHTML = `<div class="rail-loading">${esc(t("bd_loading"))}</div>`;
   try {
-    const { columns } = await getJSON(`/api/board?dir=${encodeURIComponent(p.dir)}`);
+    const { columns, sources } = await getJSON(`/api/board?dir=${encodeURIComponent(p.dir)}`);
     if (proj()?.dir !== p.dir || activeTab !== "board") return;
     if (!columns.length) { viewEl.innerHTML = `<div class="v-empty">${t("bd_empty", { file: esc(CONFIG.boardFile) })}</div>`; return; }
     const board = columns.map((c) => {
@@ -696,7 +722,9 @@ async function renderBoard(p) {
         <div class="kb-cards">${cards}</div>
       </section>`;
     }).join("");
-    viewEl.innerHTML = `<div class="kanban">${board}</div>`;
+    const cite = citeOf(sources);
+    const citeHtml = cite ? `<div class="src-cite">${esc(t("bd_src", { cite }))}</div>` : "";
+    viewEl.innerHTML = `<div class="kanban">${board}</div>${citeHtml}`;
   } catch (e) {
     viewEl.innerHTML = `<div class="v-error">${esc(t("doc_read_err", { e: String(e.message || e) }))}</div>`;
   }
@@ -706,7 +734,7 @@ async function renderBoard(p) {
 async function renderTasks(p) {
   viewEl.innerHTML = `<div class="rail-loading">${esc(t("tk_loading"))}</div>`;
   try {
-    const { groups, note } = await getJSON(`/api/tasks?dir=${encodeURIComponent(p.dir)}`);
+    const { groups, note, sources } = await getJSON(`/api/tasks?dir=${encodeURIComponent(p.dir)}`);
     if (proj()?.dir !== p.dir || activeTab !== "tasks") return;
     if (note) { viewEl.innerHTML = `<div class="v-empty">${esc(t("tk_no_map"))}</div>`; return; } // no mapping
     const all = groups.flatMap((g) => g.items);
@@ -735,7 +763,7 @@ async function renderTasks(p) {
       <div class="tk-head">
         <span class="pill pill-dirty">${esc(t("tk_open", { n: openN }))}</span>
         <span class="pill pill-clean">${esc(t("tk_done", { n: doneN }))}</span>
-        <span class="tk-src">${esc(t("tk_src", { file: CONFIG.tasksFile }))}</span>
+        <span class="tk-src">${esc(t("tk_src", { cite: citeOf(sources) || CONFIG.tasksFile }))}</span>
       </div>
       <form class="tk-add" id="tk-add">
         <input id="tk-add-input" type="text" placeholder="${esc(t("tk_add_ph", { name: p.name }))}" autocomplete="off" />

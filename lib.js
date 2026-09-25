@@ -36,14 +36,14 @@ const lc = (s) => String(s).toLowerCase();
 // Mithra is declared in the config, never inferred, so an answer can show its work.
 // Paths are workspace-relative whenever possible: pasting output into an issue
 // shouldn't leak your home directory.
-function relPath(full) {
+export function relPath(full) {
   if (!full) return null;
   const r = path.relative(DOCS, full);
   return (!r || r.startsWith('..') ? full : r).replace(/\\/g, '/');
 }
 
 // via: 'git' | 'fs' | 'vault' | 'tasks' | 'http'
-function src(via, { repo = null, file = null, match = null } = {}) {
+export function src(via, { repo = null, file = null, match = null } = {}) {
   const s = { repo, file: relPath(file), via };
   if (match?.length) s.match = [...match];
   return s;
@@ -149,7 +149,8 @@ export async function listProjects() {
 }
 
 // Parse a board file (Obsidian Kanban) -> columns with cards.
-function parseBoard(md) {
+// Exported: the GUI parses the same files and must not drift into its own dialect.
+export function parseBoard(md) {
   const text = md.replace(/\r\n/g, '\n').split('%% kanban:settings')[0]; // drop settings block
   const lines = text.split('\n');
   const cols = [];
@@ -186,7 +187,10 @@ export function getBoard(nameOrDir) {
 }
 
 // Parse TASKS.md: ## Status -> ### Project -> - [ ]/[x] item.
-function parseTasks(md) {
+// `line` is the 0-based index in the file. The GUI writes back by line number
+// (its checkbox toggle), and it makes a citation precise enough to jump to.
+// Exported for the same reason as parseBoard: one parser, two surfaces.
+export function parseTasks(md) {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   const groups = [];
   let status = null, cur = null;
@@ -195,12 +199,12 @@ function parseTasks(md) {
     const h2 = raw.match(/^##\s+(.*)$/);
     if (h2) { status = h2[1].trim(); cur = null; continue; }
     const h3 = raw.match(/^###\s+(.*)$/);
-    if (h3) { cur = { heading: h3[1].trim(), status, items: [] }; groups.push(cur); continue; }
+    if (h3) { cur = { heading: h3[1].trim(), status, line: n, items: [] }; groups.push(cur); continue; }
     const item = raw.match(/^\s*-\s+\[( |x|X)\]\s+(.*)$/);
     if (item && cur) {
       const done = item[1].toLowerCase() === 'x';
       const text = item[2].replace(/\[\[([^\]]+)\]\]/g, '$1').trim();
-      cur.items.push({ text, done, you: isManual(text) });
+      cur.items.push({ text, done, you: isManual(text), line: n });
     }
   }
   return groups;

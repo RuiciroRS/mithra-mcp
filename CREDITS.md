@@ -25,4 +25,11 @@ Mithra MCP stands on other people's work. Thanks to:
   **[ws](https://github.com/websockets/ws)** and **[Express](https://expressjs.com)** — the
   GUI's embedded terminal and the server behind it.
 
+## founder-board skill
+
+- **[The Founder Skill](https://github.com/Jakeschincariol/founder-skill)** by Jake
+  Schincariol (MIT) — the three-lens board: Offers, Monopoly, Product.
+- **[Roast Room](https://github.com/nateherkai/roast-room)** by AI Automation Society (MIT) —
+  the debate mechanics: rounds, cruxes, unanimity alarm, weighted scoring, risk caps.
+
 Licensed [MIT](LICENSE).

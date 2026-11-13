@@ -370,6 +370,14 @@ context.** Concretely, next:
   is wiring these tools into that terminal's own context, so they become how it thinks, not
   just what it shows.
 
+## Also in this repo: `founder-board` skill
+
+A standalone Claude Code skill at [`.claude/skills/founder-board/`](.claude/skills/founder-board/):
+a board of three lenses (Offers, Monopoly, Product) that evaluates a product or decides a growth
+question in two rounds of debate, with cross-examination, a unanimity alarm, weighted scoring
+and risk caps. Copy the folder into `~/.claude/skills/` to use it anywhere. Bilingual docs
+(es/en) in its [README](.claude/skills/founder-board/README.md).
+
 ## Stack
 
 Node (ESM) · [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) · `zod`. No build step.

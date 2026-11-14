@@ -5,6 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { allowedHosts, guardHttp, guardWs } from './local-guard.js';
 import pty from 'node-pty';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -28,7 +29,10 @@ const HOST   = cfg.host;
 const CLAUDE = cfg.claudeBin;   // may be null if claude was not found on the PATH
 const CWD    = cfg.root;
 
+const ALLOWED = allowedHosts(HOST, PORT);
+
 const app = express();
+app.use(guardHttp(ALLOWED)); // before anything else: no other site may drive this server
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 // xterm assets from node_modules
@@ -738,7 +742,7 @@ function attachFeed(ws) {
 }
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, verifyClient: guardWs(ALLOWED) });
 
 wss.on('connection', (ws, req) => {
   // Same WebSocket server, two kinds of connection. /feed only listens to the
